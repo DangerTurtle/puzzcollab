@@ -1,0 +1,17 @@
+{
+  "lexicon": 1,
+  "id": "at.dholms.bulletin.board",
+  "defs": {
+    "main": {
+      "type": "space",
+      "key": "literal:self",
+      "name": "Bulletin Board",
+      "description": "A personal board where followers can read and post notes.",
+      "collections": [
+        "at.dholms.bulletin.post",
+        "at.dholms.bulletin.label",
+        "at.dholms.bulletin.position"
+      ]
+    }
+  }
+}

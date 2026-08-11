@@ -1,0 +1,31 @@
+"use client";
+
+import { useState } from "react";
+
+export function CreateBoardButton() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  return (
+    <div className="stack">
+      <button
+        className="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(undefined);
+          const response = await fetch("/api/boards", { method: "POST" });
+          const body = (await response.json()) as { error?: string };
+          if (!response.ok) {
+            setError(body.error ?? "Could not create board");
+            setBusy(false);
+            return;
+          }
+          window.location.reload();
+        }}
+      >
+        {busy ? "Pinning it up…" : "Create my board"}
+      </button>
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}

@@ -1,0 +1,49 @@
+# Bulletin
+
+A local demo of proposal 0016's permissioned-data protocol. Every Bluesky user
+can create one bulletin board backed by a `com.atproto.simplespace` space under
+their DID. Other users write notes from their own permissioned repos. The space
+authority delegates read admission to this app, which checks whether the reader
+follows the board owner.
+
+The board owner moderates by publishing `at.dholms.bulletin.label` records
+inside the same space. Labels never leak through the public label stream.
+
+## Run locally
+
+The demo targets the `permissioned-data` branch in the sibling `../atproto`
+checkout and Node 22 or newer.
+
+First, start the multi-PDS network:
+
+```sh
+cd ../atproto
+pnpm --filter @atproto/dev-env start:multi-pds
+```
+
+Then start Bulletin:
+
+```sh
+cd ../spaces-demo-codex
+pnpm install
+pnpm dev
+```
+
+Open <http://127.0.0.1:3000>. The dev network seeds `alice`, `bob`, and `carol`
+on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
+
+The `dev` script migrates SQLite and publishes the `at.dholms.bulletin`
+Lexicons to the test network's Lexicon authority before starting Next.js.
+
+## Key pieces
+
+- `app/xrpc/com.atproto.simplespace.checkUserAccess`: managing-app callback
+- `lib/atproto/space-credential.ts`: delegation, credential exchange, and DPoP
+- `lib/atproto/sync-board.ts`: multi-PDS writer discovery and materialization
+- `lib/db`: SQLite state, OAuth storage, posts, and in-space labels
+- `lexicons/at/dholms`: board, post, position, label, and permission declarations
+
+This is intentionally local-first. The app uses a loopback OAuth client and the
+service DID `did:web:localhost%3A3000#bulletin`.
+
+For production setup and Railway deployment, see [DEPLOY.md](./DEPLOY.md).

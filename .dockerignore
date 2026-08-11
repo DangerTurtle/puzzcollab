@@ -1,0 +1,15 @@
+.git
+.next
+.pnpm-store
+node_modules
+.env*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.log
+*.tsbuildinfo
+coverage
+playwright-report
+test-results

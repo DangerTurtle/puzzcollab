@@ -1,0 +1,33 @@
+{
+  "lexicon": 1,
+  "id": "at.dholms.bulletin.label",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "An authority-authored moderation label kept inside the board's access boundary.",
+      "record": {
+        "type": "object",
+        "required": ["subject", "val", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef"
+          },
+          "val": {
+            "type": "string",
+            "knownValues": ["hide"],
+            "maxLength": 128
+          },
+          "neg": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

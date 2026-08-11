@@ -1,0 +1,27 @@
+{
+  "lexicon": 1,
+  "id": "at.dholms.bulletin.permissions",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "Bulletin",
+      "detail": "Read and post on Bulletin boards",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "space",
+          "spaceType": "at.dholms.bulletin.board",
+          "authority": "*",
+          "skey": "self",
+          "collection": [
+            "at.dholms.bulletin.post",
+            "at.dholms.bulletin.label",
+            "at.dholms.bulletin.position"
+          ],
+          "action": ["read", "create", "update", "delete"],
+          "manage": ["create", "update", "delete"]
+        }
+      ]
+    }
+  }
+}

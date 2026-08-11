@@ -1,0 +1,43 @@
+{
+  "name": "bulletin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm migrate && pnpm publish-lexicons && next dev --webpack --hostname 0.0.0.0",
+    "build": "next build --webpack",
+    "start": "pnpm migrate && next start --hostname 0.0.0.0",
+    "railway:start": "pnpm migrate && node --import tsx scripts/start-all.ts",
+    "sync": "pnpm migrate && node --import tsx scripts/sync.ts",
+    "lint": "eslint .",
+    "migrate": "node --import tsx scripts/migrate.ts",
+    "publish-lexicons": "node --import tsx scripts/publish-lexicons.ts",
+    "test": "node --import tsx --test lib/**/*.test.ts"
+  },
+  "dependencies": {
+    "@atproto/api": "link:../atproto/packages/api",
+    "@atproto/common-web": "link:../atproto/packages/common-web",
+    "@atproto/identity": "link:../atproto/packages/identity",
+    "@atproto/jwk-jose": "link:../atproto/packages/oauth/jwk-jose",
+    "@atproto/lex-data": "link:../atproto/packages/lex/lex-data",
+    "@atproto/oauth-client-node": "link:../atproto/packages/oauth/oauth-client-node",
+    "@atproto/space": "link:../atproto/packages/space",
+    "@atproto/syntax": "link:../atproto/packages/syntax",
+    "@atproto/xrpc-server": "link:../atproto/packages/xrpc-server",
+    "better-sqlite3": "^12.5.0",
+    "next": "16.1.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.0.10",
+    "typescript": "^5.9.0"
+  },
+  "packageManager": "pnpm@8.15.9"
+}
