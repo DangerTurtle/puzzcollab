@@ -34,6 +34,8 @@ pnpm build
 
 The local build expects the permissioned-data `atproto` checkout at
 `../atproto`. The Railway Dockerfile downloads the exact tested commit itself.
+It builds `@atproto/space` and the other required packages directly from that
+source checkout; none of them need to be published to npm.
 
 ## 3. Deploy on Railway
 
@@ -41,8 +43,9 @@ The local build expects the permissioned-data `atproto` checkout at
 2. In Railway, create a project from that GitHub repository. Railway will use
    the included `Dockerfile`; no custom build or start command is needed.
 3. Add a persistent volume mounted at `/data`.
-4. Add `bulletin.dholms.at` as the custom domain and create the DNS record
-   Railway shows you.
+4. Add `bulletin.dholms.at` as the custom domain, set its target port to
+   **3000**, and create the DNS record Railway shows you. Port 3001 is only
+   used internally by the sync sidecar.
 5. Add these Railway variables:
 
 ```text

@@ -13,7 +13,17 @@ RUN git clone --filter=blob:none https://github.com/bluesky-social/atproto.git a
   && git -C atproto checkout "$ATPROTO_COMMIT" \
   && corepack prepare pnpm@11.11.0 --activate \
   && pnpm --dir atproto install --frozen-lockfile \
-  && pnpm --dir atproto build
+  && pnpm --dir atproto \
+    --filter '@atproto/api...' \
+    --filter '@atproto/common-web...' \
+    --filter '@atproto/identity...' \
+    --filter '@atproto/jwk-jose...' \
+    --filter '@atproto/lex-data...' \
+    --filter '@atproto/oauth-client-node...' \
+    --filter '@atproto/space...' \
+    --filter '@atproto/syntax...' \
+    --filter '@atproto/xrpc-server...' \
+    run build
 
 COPY . bulletin
 WORKDIR /workspace/bulletin
