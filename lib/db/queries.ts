@@ -130,6 +130,18 @@ export function listSpaceWatches(): SpaceWatch[] {
     .all() as SpaceWatch[];
 }
 
+export function deleteSyncedSpace(spaceUri: string): void {
+  const db = getDb();
+  db.transaction(() => {
+    db.prepare("DELETE FROM note_position WHERE space_uri = ?").run(spaceUri);
+    db.prepare("DELETE FROM moderation_label WHERE space_uri = ?").run(spaceUri);
+    db.prepare("DELETE FROM post WHERE space_uri = ?").run(spaceUri);
+    db.prepare("DELETE FROM sync_repo WHERE space_uri = ?").run(spaceUri);
+    db.prepare("DELETE FROM sync_space WHERE space_uri = ?").run(spaceUri);
+    db.prepare("DELETE FROM board WHERE space_uri = ?").run(spaceUri);
+  })();
+}
+
 export function updateSpaceWatch(input: {
   spaceUri: string;
   registrationExpiresAt?: string | null;

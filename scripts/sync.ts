@@ -7,7 +7,10 @@ import {
 } from "../lib/config";
 import { migrate } from "../lib/db/migrations";
 import { SyncEngine } from "../lib/sync/engine";
-import { verifySyncNotification } from "../lib/sync/service-auth";
+import {
+  verifySpaceDeletionNotification,
+  verifySyncNotification,
+} from "../lib/sync/service-auth";
 
 const clients = new Map<string, Set<ServerResponse>>();
 const engine = new SyncEngine((space) => broadcast(space));
@@ -82,6 +85,21 @@ const server = createServer(async (request, response) => {
         rev: body.rev,
       }).catch((error) => console.error("notification sync failed", error));
       return;
+    }
+    if (
+      request.method === "POST" &&
+      url.pathname === "/xrpc/com.atproto.space.notifySpaceDeleted"
+    ) {
+      const body = await readJson(request);
+      if (typeof body.space !== "string") {
+        return json(response, 400, { error: "Invalid notification" });
+      }
+      const authorization = Array.isArray(request.headers.authorization)
+        ? request.headers.authorization[0]
+        : request.headers.authorization;
+      await verifySpaceDeletionNotification(authorization, body.space);
+      engine.deleteSpace(body.space);
+      return json(response, 200, {});
     }
     return json(response, 404, { error: "Not found" });
   } catch (error) {

@@ -13,6 +13,7 @@ import {
 } from "../config";
 import {
   applySyncedChanges,
+  deleteSyncedSpace,
   getSyncedRepo,
   listSpaceWatches,
   replaceRepoRecords,
@@ -32,6 +33,7 @@ import {
   type SpaceCredential,
 } from "../atproto/space-credential";
 import { orderCredentialCandidates } from "./credential-candidates";
+import { isSpaceDeletedError } from "./errors";
 import {
   REGISTRATION_RETRY_MS,
   registrationRenewalDelay,
@@ -43,6 +45,7 @@ type OnChange = (space: string) => void;
 export class SyncEngine {
   private credentials = new Map<string, SpaceCredential>();
   private jobs = new Map<string, Promise<void>>();
+  private deletedSpaces = new Set<string>();
   private registrationTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -62,6 +65,7 @@ export class SyncEngine {
   }
 
   async watch(space: string): Promise<void> {
+    if (this.deletedSpaces.has(space)) throw new Error("Space has been deleted");
     const authorityDid = authorityFromSpace(space);
     saveSpaceWatch({ spaceUri: space, authorityDid });
     const watch = listSpaceWatches().find((item) => item.spaceUri === space);
@@ -76,12 +80,25 @@ export class SyncEngine {
   }
 
   async notify(input: NotifyInput): Promise<void> {
+    if (this.deletedSpaces.has(input.space)) return;
     const watch = listSpaceWatches().find((item) => item.spaceUri === input.space);
     if (!watch) return;
     await this.enqueue(input.space, input.repo, async () => {
+      if (this.deletedSpaces.has(input.space)) return;
       await this.syncRepo(watch, input.repo);
+      if (this.deletedSpaces.has(input.space)) return;
       this.onChange(input.space);
     });
+  }
+
+  deleteSpace(space: string): void {
+    this.deletedSpaces.add(space);
+    this.credentials.delete(space);
+    const timer = this.registrationTimers.get(space);
+    if (timer) clearTimeout(timer);
+    this.registrationTimers.delete(space);
+    deleteSyncedSpace(space);
+    this.onChange(space);
   }
 
   stop(): void {
@@ -119,6 +136,7 @@ export class SyncEngine {
           cursor,
         });
         for (const repo of page.data.repos) {
+          if (this.deletedSpaces.has(watch.spaceUri)) return;
           const local = getSyncedRepo(watch.spaceUri, repo.did);
           if (!local || local.rev !== repo.rev) {
             await this.enqueue(watch.spaceUri, repo.did, () =>
@@ -130,6 +148,7 @@ export class SyncEngine {
         cursor = page.data.cursor;
       } while (cursor);
 
+      if (this.deletedSpaces.has(watch.spaceUri)) return;
       saveBoard(watch.spaceUri, watch.authorityDid);
       updateSpaceWatch({ spaceUri: watch.spaceUri, lastError: null });
       if (changed) this.onChange(watch.spaceUri);
@@ -150,6 +169,7 @@ export class SyncEngine {
         space: watch.spaceUri,
         service: SYNC_SERVICE,
       });
+      if (this.deletedSpaces.has(watch.spaceUri)) return;
       updateSpaceWatch({
         spaceUri: watch.spaceUri,
         registrationExpiresAt: registered.data.expiresAt,
@@ -170,11 +190,13 @@ export class SyncEngine {
   }
 
   private scheduleRegistrationRetry(watch: SpaceWatch): void {
+    if (this.deletedSpaces.has(watch.spaceUri)) return;
     if (this.registrationTimers.has(watch.spaceUri)) return;
     this.scheduleRegistration(watch, REGISTRATION_RETRY_MS);
   }
 
   private scheduleRegistration(watch: SpaceWatch, delay: number): void {
+    if (this.deletedSpaces.has(watch.spaceUri)) return;
     const existing = this.registrationTimers.get(watch.spaceUri);
     if (existing) clearTimeout(existing);
 
@@ -194,6 +216,7 @@ export class SyncEngine {
     repoDid: string,
     credential: SpaceCredential,
   ): Promise<void> {
+    if (this.deletedSpaces.has(watch.spaceUri)) return;
     const local = getSyncedRepo(watch.spaceUri, repoDid);
     if (!local) {
       await this.recoverRepo(watch.spaceUri, repoDid, credential);
@@ -247,6 +270,7 @@ export class SyncEngine {
         throw new Error("Incremental sync hash mismatch");
       }
 
+      if (this.deletedSpaces.has(watch.spaceUri)) return;
       applySyncedChanges(changes);
       saveSyncedRepo({
         spaceUri: watch.spaceUri,
@@ -257,6 +281,7 @@ export class SyncEngine {
         commitHash: commit.hash,
       });
     } catch (error) {
+      if (this.deletedSpaces.has(watch.spaceUri)) return;
       console.warn(`incremental sync fell back to recovery for ${repoDid}`, error);
       await this.recoverRepo(watch.spaceUri, repoDid, credential);
     }
@@ -299,6 +324,7 @@ export class SyncEngine {
       if (change?.kind === "position") positions.push(stripPosition(change.value));
     }
 
+    if (this.deletedSpaces.has(space)) return;
     replaceRepoRecords({ spaceUri: space, authorDid: repoDid, posts, labels, positions });
     saveSyncedRepo({
       spaceUri: space,
@@ -315,10 +341,20 @@ export class SyncEngine {
     operation: (credential: SpaceCredential) => Promise<T>,
   ): Promise<T> {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const credential = await this.credentialFor(watch, attempt > 0);
+      let credential: SpaceCredential;
+      try {
+        credential = await this.credentialFor(watch, attempt > 0);
+      } catch (error) {
+        if (isSpaceDeletedError(error)) this.deleteSpace(watch.spaceUri);
+        throw error;
+      }
       try {
         return await operation(credential);
       } catch (error) {
+        if (isSpaceDeletedError(error)) {
+          this.deleteSpace(watch.spaceUri);
+          throw error;
+        }
         if (attempt > 0) throw error;
         this.credentials.delete(watch.spaceUri);
       }
@@ -345,6 +381,7 @@ export class SyncEngine {
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
+        if (isSpaceDeletedError(error)) throw error;
         lastError = error;
         console.warn(
           `could not mint sync credential for ${watch.authorityDid}`,
@@ -368,6 +405,7 @@ export class SyncEngine {
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
+        if (isSpaceDeletedError(error)) throw error;
         lastError = error;
         console.warn(`could not mint sync credential for ${did}`, error);
       }
