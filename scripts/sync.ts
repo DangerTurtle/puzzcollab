@@ -97,7 +97,6 @@ server.listen(port, "0.0.0.0", () => {
   void engine.resume();
 });
 
-const reconcileTimer = setInterval(() => void engine.reconcileAll(), 60_000);
 const heartbeatTimer = setInterval(() => {
   for (const group of clients.values()) {
     for (const client of group) client.write(": keepalive\n\n");
@@ -106,7 +105,7 @@ const heartbeatTimer = setInterval(() => {
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    clearInterval(reconcileTimer);
+    engine.stop();
     clearInterval(heartbeatTimer);
     server.close(() => process.exit(0));
   });

@@ -32,6 +32,10 @@ import {
   type SpaceCredential,
 } from "../atproto/space-credential";
 import { orderCredentialCandidates } from "./credential-candidates";
+import {
+  REGISTRATION_RETRY_MS,
+  registrationRenewalDelay,
+} from "./registration";
 
 type NotifyInput = { space: string; repo: string; rev: string };
 type OnChange = (space: string) => void;
@@ -39,13 +43,20 @@ type OnChange = (space: string) => void;
 export class SyncEngine {
   private credentials = new Map<string, SpaceCredential>();
   private jobs = new Map<string, Promise<void>>();
+  private registrationTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(private readonly onChange: OnChange) {}
 
   async resume(): Promise<void> {
     await Promise.all(
       listSpaceWatches().map((watch) =>
-        this.reconcile(watch).catch((error) => this.recordError(watch.spaceUri, error)),
+        this.reconcile(watch).catch((error) => {
+          this.recordError(watch.spaceUri, error);
+          this.scheduleRegistrationRetry(watch);
+        }),
       ),
     );
   }
@@ -55,7 +66,13 @@ export class SyncEngine {
     saveSpaceWatch({ spaceUri: space, authorityDid });
     const watch = listSpaceWatches().find((item) => item.spaceUri === space);
     if (!watch) throw new Error("Could not save board subscription");
-    await this.reconcile(watch);
+    try {
+      await this.reconcile(watch);
+    } catch (error) {
+      this.recordError(watch.spaceUri, error);
+      this.scheduleRegistrationRetry(watch);
+      throw error;
+    }
   }
 
   async notify(input: NotifyInput): Promise<void> {
@@ -67,10 +84,9 @@ export class SyncEngine {
     });
   }
 
-  async reconcileAll(): Promise<void> {
-    for (const watch of listSpaceWatches()) {
-      await this.reconcile(watch).catch((error) => this.recordError(watch.spaceUri, error));
-    }
+  stop(): void {
+    for (const timer of this.registrationTimers.values()) clearTimeout(timer);
+    this.registrationTimers.clear();
   }
 
   private async reconcile(watch: SpaceWatch): Promise<void> {
@@ -78,16 +94,21 @@ export class SyncEngine {
       let changed = false;
       const authorityPds = await resolvePds(watch.authorityDid);
       const authorityAgent = credential.agent(authorityPds);
+      let registrationExpiresAt = watch.registrationExpiresAt;
       if (registrationNeedsRenewal(watch.registrationExpiresAt)) {
         const registered = await authorityAgent.com.atproto.space.registerNotify({
           space: watch.spaceUri,
           service: SYNC_SERVICE,
         });
+        registrationExpiresAt = registered.data.expiresAt;
         updateSpaceWatch({
           spaceUri: watch.spaceUri,
-          registrationExpiresAt: registered.data.expiresAt,
+          registrationExpiresAt,
           lastError: null,
         });
+      }
+      if (registrationExpiresAt) {
+        this.scheduleRegistrationRenewal(watch, registrationExpiresAt);
       }
 
       let cursor: string | undefined;
@@ -119,6 +140,53 @@ export class SyncEngine {
     await this.withCredential(watch, (credential) =>
       this.syncRepoWithCredential(watch, repoDid, credential),
     );
+  }
+
+  private async renewRegistration(watch: SpaceWatch): Promise<void> {
+    await this.withCredential(watch, async (credential) => {
+      const authorityPds = await resolvePds(watch.authorityDid);
+      const authorityAgent = credential.agent(authorityPds);
+      const registered = await authorityAgent.com.atproto.space.registerNotify({
+        space: watch.spaceUri,
+        service: SYNC_SERVICE,
+      });
+      updateSpaceWatch({
+        spaceUri: watch.spaceUri,
+        registrationExpiresAt: registered.data.expiresAt,
+        lastError: null,
+      });
+      this.scheduleRegistrationRenewal(watch, registered.data.expiresAt);
+    });
+  }
+
+  private scheduleRegistrationRenewal(
+    watch: SpaceWatch,
+    expiresAt: string,
+  ): void {
+    this.scheduleRegistration(
+      watch,
+      registrationRenewalDelay(expiresAt),
+    );
+  }
+
+  private scheduleRegistrationRetry(watch: SpaceWatch): void {
+    if (this.registrationTimers.has(watch.spaceUri)) return;
+    this.scheduleRegistration(watch, REGISTRATION_RETRY_MS);
+  }
+
+  private scheduleRegistration(watch: SpaceWatch, delay: number): void {
+    const existing = this.registrationTimers.get(watch.spaceUri);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.registrationTimers.delete(watch.spaceUri);
+      void this.renewRegistration(watch).catch((error) => {
+        this.recordError(watch.spaceUri, error);
+        this.scheduleRegistrationRetry(watch);
+      });
+    }, delay);
+    timer.unref();
+    this.registrationTimers.set(watch.spaceUri, timer);
   }
 
   private async syncRepoWithCredential(
