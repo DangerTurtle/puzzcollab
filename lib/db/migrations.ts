@@ -210,6 +210,30 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 10,
+    up(db) {
+      db.exec(`
+        ALTER TABLE post ADD COLUMN image_cid TEXT;
+        ALTER TABLE post ADD COLUMN image_mime TEXT;
+        ALTER TABLE post ADD COLUMN image_size INTEGER;
+        ALTER TABLE post ADD COLUMN image_alt TEXT;
+
+        CREATE TABLE space_blob (
+          space_uri TEXT NOT NULL,
+          repo_did TEXT NOT NULL,
+          cid TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(space_uri, repo_did, cid)
+        );
+
+        DELETE FROM auth_session;
+        DELETE FROM auth_state;
+      `);
+    },
+  },
 ];
 
 export function migrate(): void {

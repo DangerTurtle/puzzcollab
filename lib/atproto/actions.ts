@@ -10,6 +10,7 @@ import {
 } from "../config";
 import {
   deleteStoredPost,
+  applySyncedChanges,
   getPost,
   saveBoard,
   upsertLabel,
@@ -18,6 +19,14 @@ import {
 } from "../db/queries";
 import { getRelationship, userFollows } from "./follows";
 import type { NoteColor } from "../note-style";
+import {
+  isNoteImageMime,
+  MAX_NOTE_IMAGE_BYTES,
+  noteImageBlobRef,
+  parseNoteImage,
+  type NoteImage,
+} from "../note-image";
+import { storeBlobFile } from "../blob-store";
 
 export async function createBoard(session: OAuthSession): Promise<string> {
   const agent = new Agent(session);
@@ -53,12 +62,39 @@ export async function createPost(
   ownerDid: string,
   text: string,
   style: { color: NoteColor; rotation: number; x: number; y: number },
+  imageInput?: {
+    bytes: Uint8Array;
+    mimeType: string;
+    alt: string | null;
+  },
 ): Promise<string> {
   await assertCanWrite(session.did, ownerDid);
   const space = boardUri(ownerDid);
   const createdAt = new Date().toISOString();
   const position = { x: style.x, y: style.y };
   const agent = new Agent(session);
+  let image: NoteImage | undefined;
+  if (imageInput) {
+    if (
+      !isNoteImageMime(imageInput.mimeType) ||
+      imageInput.bytes.length <= 0 ||
+      imageInput.bytes.length > MAX_NOTE_IMAGE_BYTES
+    ) {
+      throw new Error("Invalid note image");
+    }
+    const uploaded = await agent.com.atproto.repo.uploadBlob(imageInput.bytes, {
+      encoding: imageInput.mimeType,
+    });
+    image =
+      parseNoteImage(uploaded.data.blob.ipld(), imageInput.alt) ?? undefined;
+    if (
+      !image ||
+      image.mimeType !== imageInput.mimeType ||
+      image.size !== imageInput.bytes.length
+    ) {
+      throw new Error("PDS returned an invalid image reference");
+    }
+  }
   const result = await agent.com.atproto.space.createRecord({
     space,
     repo: session.did,
@@ -67,23 +103,50 @@ export async function createPost(
     record: {
       $type: POST_COLLECTION,
       text,
+      ...(image ? { image: noteImageBlobRef(image) } : {}),
+      ...(image?.alt ? { imageAlt: image.alt } : {}),
       position,
       color: style.color,
       rotation: style.rotation,
       createdAt,
     },
   });
-  upsertPost({
-    uri: result.data.uri,
-    cid: result.data.cid,
-    spaceUri: space,
-    authorDid: session.did,
-    text,
-    color: style.color,
-    rotation: style.rotation,
-    ...position,
-    createdAt,
-  });
+  const blob = image
+    ? {
+        spaceUri: space,
+        repoDid: session.did,
+        cid: image.cid,
+        mimeType: image.mimeType,
+        size: image.size,
+      }
+    : undefined;
+  applySyncedChanges(
+    [
+      {
+        kind: "post",
+        value: {
+          uri: result.data.uri,
+          cid: result.data.cid,
+          spaceUri: space,
+          authorDid: session.did,
+          text,
+          image,
+          color: style.color,
+          rotation: style.rotation,
+          ...position,
+          createdAt,
+        },
+      },
+    ],
+    blob ? [blob] : [],
+  );
+  if (image) {
+    try {
+      storeBlobFile(image.cid, imageInput!.bytes);
+    } catch (error) {
+      console.error("Could not cache the new note image", error);
+    }
+  }
   return result.data.uri;
 }
 
@@ -109,6 +172,7 @@ export async function movePost(
 
   const agent = new Agent(session);
   if (session.did === post.authorDid) {
+    const image = storedPostImage(post);
     const rkey = postRkey(post.uri, space, post.authorDid);
     const result = await agent.com.atproto.space.putRecord({
       space,
@@ -119,6 +183,8 @@ export async function movePost(
       record: {
         $type: POST_COLLECTION,
         text: post.text,
+        ...(image ? { image: noteImageBlobRef(image) } : {}),
+        ...(image?.alt ? { imageAlt: image.alt } : {}),
         ...(post.color ? { color: post.color } : {}),
         ...(post.rotation !== null ? { rotation: post.rotation } : {}),
         position: { x: input.x, y: input.y },
@@ -130,6 +196,7 @@ export async function movePost(
       cid: result.data.cid,
       color: post.color ?? undefined,
       rotation: post.rotation ?? undefined,
+      image,
       x: input.x,
       y: input.y,
     });
@@ -242,4 +309,16 @@ function postRkey(uri: string, space: string, authorDid: string): string {
   const rkey = uri.slice(prefix.length);
   if (!rkey || rkey.includes("/")) throw new Error("Invalid note reference");
   return rkey;
+}
+
+function storedPostImage(post: ReturnType<typeof getPost>): NoteImage | undefined {
+  if (!post?.imageCid || !isNoteImageMime(post.imageMime) || post.imageSize === null) {
+    return undefined;
+  }
+  return {
+    cid: post.imageCid,
+    mimeType: post.imageMime,
+    size: post.imageSize,
+    alt: post.imageAlt,
+  };
 }

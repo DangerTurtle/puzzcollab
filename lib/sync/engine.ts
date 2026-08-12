@@ -22,10 +22,13 @@ import {
   saveSyncedRepo,
   updateSpaceWatch,
   type SpaceWatch,
+  type SpaceBlob,
   type SyncedChange,
 } from "../db/queries";
 import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { isNoteColor, isNoteRotation } from "../note-style";
+import { parseNoteImage } from "../note-image";
+import { readBlobFile, storeBlobFile } from "../blob-store";
 import { getIdResolver, resolvePds } from "../atproto/identity";
 import { getFollowersAmong } from "../atproto/follows";
 import {
@@ -41,6 +44,7 @@ import {
 
 type NotifyInput = { space: string; repo: string; rev: string };
 type OnChange = (space: string) => void;
+type SyncedBlob = SpaceBlob & { bytes: Uint8Array };
 
 export class SyncEngine {
   private credentials = new Map<string, SpaceCredential>();
@@ -270,8 +274,14 @@ export class SyncEngine {
         throw new Error("Incremental sync hash mismatch");
       }
 
+      const blobs = await this.fetchImageBlobs(
+        changes,
+        local.pdsUrl,
+        credential,
+      );
       if (this.deletedSpaces.has(watch.spaceUri)) return;
-      applySyncedChanges(changes);
+      applySyncedChanges(changes, stripBlobBytes(blobs));
+      storeBlobFiles(blobs);
       saveSyncedRepo({
         spaceUri: watch.spaceUri,
         repoDid,
@@ -309,6 +319,7 @@ export class SyncEngine {
     const posts: Parameters<typeof replaceRepoRecords>[0]["posts"] = [];
     const labels: Parameters<typeof replaceRepoRecords>[0]["labels"] = [];
     const positions: Parameters<typeof replaceRepoRecords>[0]["positions"] = [];
+    const postChanges: Extract<SyncedChange, { kind: "post" }>[] = [];
 
     for (const record of recovered.records) {
       const change = parseChange({
@@ -319,13 +330,25 @@ export class SyncEngine {
         cid: record.cid.toString(),
         value: record.record,
       });
-      if (change?.kind === "post") posts.push(stripPost(change.value));
+      if (change?.kind === "post") {
+        postChanges.push(change);
+        posts.push(stripPost(change.value));
+      }
       if (change?.kind === "label") labels.push(stripLabel(change.value));
       if (change?.kind === "position") positions.push(stripPosition(change.value));
     }
 
+    const blobs = await this.fetchImageBlobs(postChanges, pdsUrl, credential);
     if (this.deletedSpaces.has(space)) return;
-    replaceRepoRecords({ spaceUri: space, authorDid: repoDid, posts, labels, positions });
+    replaceRepoRecords({
+      spaceUri: space,
+      authorDid: repoDid,
+      posts,
+      labels,
+      positions,
+      blobs: stripBlobBytes(blobs),
+    });
+    storeBlobFiles(blobs);
     saveSyncedRepo({
       spaceUri: space,
       repoDid,
@@ -334,6 +357,60 @@ export class SyncEngine {
       ltHash: recovered.repo.setHash.state(),
       commitHash: recovered.commit.hash,
     });
+  }
+
+  private async fetchImageBlobs(
+    changes: SyncedChange[],
+    pdsUrl: string,
+    credential: SpaceCredential,
+  ): Promise<SyncedBlob[]> {
+    const blobs = new Map<string, SyncedBlob>();
+    const finalPostChanges: Extract<SyncedChange, { kind: "post" }>[] = [];
+    const seenUris = new Set<string>();
+    for (let index = changes.length - 1; index >= 0; index--) {
+      const change = changes[index];
+      if (change.kind === "post") {
+        if (!seenUris.has(change.value.uri)) finalPostChanges.push(change);
+        seenUris.add(change.value.uri);
+      } else if (change.kind === "delete" && change.table === "post") {
+        seenUris.add(change.uri);
+      }
+    }
+
+    for (const change of finalPostChanges) {
+      if (change.kind !== "post" || !change.value.image) continue;
+      const { image, spaceUri, authorDid } = change.value;
+      const key = `${spaceUri}\u0000${authorDid}\u0000${image.cid}`;
+      const prior = blobs.get(key);
+      if (prior) {
+        if (prior.mimeType !== image.mimeType || prior.size !== image.size) {
+          throw new Error("Conflicting image metadata for the same blob");
+        }
+        continue;
+      }
+
+      let bytes = readBlobFile(image.cid) ?? undefined;
+      if (!bytes || bytes.length !== image.size) {
+        const response = await credential.agent(pdsUrl).com.atproto.space.getBlob({
+          space: spaceUri,
+          repo: authorDid,
+          cid: image.cid,
+        });
+        bytes = response.data;
+      }
+      if (bytes.length !== image.size) {
+        throw new Error(`Image blob had an unexpected size (${image.cid})`);
+      }
+      blobs.set(key, {
+        spaceUri,
+        repoDid: authorDid,
+        cid: image.cid,
+        mimeType: image.mimeType,
+        size: image.size,
+        bytes,
+      });
+    }
+    return [...blobs.values()];
   }
 
   private async withCredential<T>(
@@ -444,12 +521,28 @@ function parseChange(input: {
 }): SyncedChange | undefined {
   const uri = `${input.space}/${input.repoDid}/${input.collection}/${input.rkey}`;
   const table = tableForCollection(input.collection);
-  if (!input.cid) return table ? { kind: "delete", table, uri } : undefined;
+  const deletion = table
+    ? {
+        kind: "delete" as const,
+        table,
+        uri,
+        spaceUri: input.space,
+        authorDid: input.repoDid,
+      }
+    : undefined;
+  if (!input.cid) return deletion;
   if (!input.value || typeof input.value !== "object") return undefined;
   const value = input.value as Record<string, unknown>;
   const createdAt = typeof value.createdAt === "string" ? value.createdAt : undefined;
 
-  if (input.collection === POST_COLLECTION && typeof value.text === "string" && createdAt) {
+  if (input.collection === POST_COLLECTION) {
+    if (typeof value.text !== "string" || !createdAt) return deletion;
+    let image: NonNullable<ReturnType<typeof parseNoteImage>> | undefined;
+    if (value.image !== undefined) {
+      const parsedImage = parseNoteImage(value.image, value.imageAlt);
+      if (!parsedImage) return deletion;
+      image = parsedImage;
+    }
     const position = parsePosition(value.position);
     return {
       kind: "post",
@@ -459,6 +552,7 @@ function parseChange(input: {
         spaceUri: input.space,
         authorDid: input.repoDid,
         text: value.text,
+        image,
         color: isNoteColor(value.color) ? value.color : undefined,
         rotation: isNoteRotation(value.rotation) ? value.rotation : undefined,
         x: position?.x,
@@ -582,6 +676,7 @@ function stripPost(value: Extract<SyncedChange, { kind: "post" }>["value"]) {
     cid: value.cid,
     uri: value.uri,
     text: value.text,
+    image: value.image,
     color: value.color,
     rotation: value.rotation,
     x: value.x,
@@ -612,4 +707,18 @@ function stripPosition(value: Extract<SyncedChange, { kind: "position" }>["value
     y: value.y,
     createdAt: value.createdAt,
   };
+}
+
+function stripBlobBytes(blobs: SyncedBlob[]): SpaceBlob[] {
+  return blobs.map((blob) => ({
+    spaceUri: blob.spaceUri,
+    repoDid: blob.repoDid,
+    cid: blob.cid,
+    mimeType: blob.mimeType,
+    size: blob.size,
+  }));
+}
+
+function storeBlobFiles(blobs: SyncedBlob[]): void {
+  for (const blob of blobs) storeBlobFile(blob.cid, blob.bytes);
 }

@@ -139,7 +139,7 @@ export default async function BoardPage({
           key={displayedPosts
             .map(
               (post) =>
-                `${post.cid}:${post.x}:${post.y}:${post.color}:${post.rotation}:${post.hidden}`,
+                `${post.cid}:${post.x}:${post.y}:${post.color}:${post.rotation}:${post.imageCid}:${post.hidden}`,
             )
             .join("|")}
           initialPosts={displayedPosts.map((post) => ({

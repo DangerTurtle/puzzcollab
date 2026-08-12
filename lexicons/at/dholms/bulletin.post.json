@@ -14,6 +14,16 @@
             "maxGraphemes": 300,
             "maxLength": 3000
           },
+          "image": {
+            "type": "blob",
+            "accept": ["image/jpeg", "image/png", "image/webp"],
+            "maxSize": 500000
+          },
+          "imageAlt": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "maxLength": 3000
+          },
           "position": {
             "type": "object",
             "required": ["x", "y"],

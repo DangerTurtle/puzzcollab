@@ -2,40 +2,57 @@ import { createPost, deleteOwnPost } from "@/lib/atproto/actions";
 import { requireSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { isNoteColor, isNoteRotation } from "@/lib/note-style";
+import {
+  isNoteImageMime,
+  MAX_NOTE_IMAGE_ALT_LENGTH,
+  MAX_NOTE_IMAGE_BYTES,
+} from "@/lib/note-image";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
-      ownerDid?: string;
-      text?: string;
-      color?: unknown;
-      rotation?: unknown;
-      x?: unknown;
-      y?: unknown;
-    };
-    const text = body.text?.trim();
+    const body = await request.formData();
+    const ownerDid = stringValue(body.get("ownerDid"));
+    const text = stringValue(body.get("text"))?.trim();
+    const color = stringValue(body.get("color"));
+    const rotation = numberValue(body.get("rotation"));
+    const x = numberValue(body.get("x"));
+    const y = numberValue(body.get("y"));
+    const imageValue = body.get("image");
+    const image = imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
+    const imageAlt = stringValue(body.get("imageAlt"))?.trim() ?? "";
     if (
-      !body.ownerDid?.startsWith("did:") ||
+      !ownerDid?.startsWith("did:") ||
       !text ||
       Array.from(text).length > 300 ||
-      !isNoteColor(body.color) ||
-      !isNoteRotation(body.rotation) ||
-      !validCoordinate(body.x) ||
-      !validCoordinate(body.y)
+      !isNoteColor(color) ||
+      !isNoteRotation(rotation) ||
+      !validCoordinate(x) ||
+      !validCoordinate(y) ||
+      (image !== null &&
+        (!isNoteImageMime(image.type) ||
+          image.size > MAX_NOTE_IMAGE_BYTES ||
+          Array.from(imageAlt).length > MAX_NOTE_IMAGE_ALT_LENGTH))
     ) {
       return NextResponse.json(
-        { error: "Enter a note up to 300 characters" },
+        { error: "Enter a valid note and an optional image up to 500 KB" },
         { status: 400 },
       );
     }
-    const uri = await createPost(await requireSession(), body.ownerDid, text, {
-      color: body.color,
-      rotation: body.rotation,
-      x: body.x,
-      y: body.y,
-    });
+    const uri = await createPost(
+      await requireSession(),
+      ownerDid,
+      text,
+      { color, rotation, x, y },
+      image
+        ? {
+            bytes: new Uint8Array(await image.arrayBuffer()),
+            mimeType: image.type,
+            alt: imageAlt || null,
+          }
+        : undefined,
+    );
     return NextResponse.json({ uri });
   } catch (error) {
     console.error(error);
@@ -73,4 +90,15 @@ export async function DELETE(request: NextRequest) {
 
 function validCoordinate(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1000;
+}
+
+function stringValue(value: FormDataEntryValue | null): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberValue(value: FormDataEntryValue | null): number | undefined {
+  const string = stringValue(value);
+  if (string === undefined || string.trim() === "") return undefined;
+  const number = Number(string);
+  return Number.isFinite(number) ? number : undefined;
 }

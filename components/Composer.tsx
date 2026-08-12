@@ -14,6 +14,8 @@ export function Composer({
 }) {
   const [text, setText] = useState("");
   const [color, setColor] = useState<NoteColor>("yellow");
+  const [image, setImage] = useState<File>();
+  const [imageAlt, setImageAlt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -21,16 +23,25 @@ export function Composer({
     event.preventDefault();
     setBusy(true);
     setError(undefined);
+    if (image && image.size > 500_000) {
+      setError("Choose an image smaller than 500 KB");
+      setBusy(false);
+      return;
+    }
+    const form = new FormData();
+    form.set("ownerDid", ownerDid);
+    form.set("text", text);
+    form.set("color", color);
+    form.set("rotation", String(randomRotation()));
+    form.set("x", String(position.x));
+    form.set("y", String(position.y));
+    if (image) {
+      form.set("image", image);
+      form.set("imageAlt", imageAlt);
+    }
     const response = await fetch("/api/posts", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ownerDid,
-        text,
-        color,
-        rotation: randomRotation(),
-        ...position,
-      }),
+      body: form,
     });
     const body = (await response.json()) as { error?: string };
     if (!response.ok) {
@@ -86,6 +97,39 @@ export function Composer({
           ))}
         </fieldset>
         <span>{text.length}/300</span>
+      </div>
+      <div className="composer-image-fields">
+        <label className="composer-image-picker">
+          <span>{image ? "Change image" : "Add an image"}</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const next = event.target.files?.[0];
+              if (next && next.size > 500_000) {
+                setImage(undefined);
+                setError("Choose an image smaller than 500 KB");
+                event.target.value = "";
+                return;
+              }
+              setError(undefined);
+              setImage(next);
+            }}
+          />
+        </label>
+        {image && (
+          <>
+            <span className="composer-image-name">{image.name}</span>
+            <input
+              className="field composer-image-alt"
+              value={imageAlt}
+              maxLength={300}
+              onChange={(event) => setImageAlt(event.target.value)}
+              placeholder="Describe the image (optional)"
+              aria-label="Image description"
+            />
+          </>
+        )}
       </div>
       {error && <div className="error">{error}</div>}
       <button className="button" disabled={busy || !text.trim()}>

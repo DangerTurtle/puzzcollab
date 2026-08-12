@@ -186,6 +186,15 @@ export function SpatialBoard({
                 onPointerCancel={finishDrag}
                 title={movable ? "Drag to move this note" : undefined}
               >
+                {post.imageCid && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className="note-image"
+                    src={noteImageUrl(post)}
+                    alt={post.imageAlt ?? ""}
+                    draggable={false}
+                  />
+                )}
                 <div className="note-text">{post.text}</div>
                 {post.hidden && (
                   <div className="note-visibility">Removed from board</div>
@@ -243,4 +252,12 @@ function clamp(value: number): number {
 
 function avatarLetter(handle: string | null): string {
   return (handle?.replace(/^@/, "")[0] ?? "?").toUpperCase();
+}
+
+function noteImageUrl(post: SpatialPost): string {
+  return `/api/images?${new URLSearchParams({
+    space: post.spaceUri,
+    repo: post.authorDid,
+    cid: post.imageCid ?? "",
+  })}`;
 }

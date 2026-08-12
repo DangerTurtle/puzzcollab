@@ -1,5 +1,7 @@
 import { getDb } from "./index";
 import { fallbackNoteStyle, type NoteColor } from "../note-style";
+import type { NoteImage } from "../note-image";
+import { deleteBlobFile } from "../blob-store";
 
 export type BoardPost = {
   uri: string;
@@ -8,6 +10,10 @@ export type BoardPost = {
   authorDid: string;
   authorHandle: string | null;
   text: string;
+  imageCid: string | null;
+  imageMime: string | null;
+  imageSize: number | null;
+  imageAlt: string | null;
   color: NoteColor;
   rotation: number;
   x: number;
@@ -40,6 +46,14 @@ export type SyncedRepo = {
   rev: string;
   ltHash: Uint8Array;
   commitHash: Uint8Array;
+};
+
+export type SpaceBlob = {
+  spaceUri: string;
+  repoDid: string;
+  cid: string;
+  mimeType: string;
+  size: number;
 };
 
 export function saveAccount(input: {
@@ -132,14 +146,21 @@ export function listSpaceWatches(): SpaceWatch[] {
 
 export function deleteSyncedSpace(spaceUri: string): void {
   const db = getDb();
-  db.transaction(() => {
+  const dereferenced = db.transaction(() => {
+    const cids = db
+      .prepare("SELECT cid FROM space_blob WHERE space_uri = ?")
+      .all(spaceUri)
+      .map((row) => (row as { cid: string }).cid);
+    db.prepare("DELETE FROM space_blob WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM note_position WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM moderation_label WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM post WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM sync_repo WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM sync_space WHERE space_uri = ?").run(spaceUri);
     db.prepare("DELETE FROM board WHERE space_uri = ?").run(spaceUri);
+    return cids;
   })();
+  deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
 export function updateSpaceWatch(input: {
@@ -215,6 +236,7 @@ export function replaceRepoRecords(input: {
     uri: string;
     cid: string;
     text: string;
+    image?: NoteImage;
     color?: NoteColor;
     rotation?: number;
     x?: number;
@@ -239,9 +261,10 @@ export function replaceRepoRecords(input: {
     y: number;
     createdAt: string;
   }>;
+  blobs?: SpaceBlob[];
 }): void {
   const db = getDb();
-  db.transaction(() => {
+  const dereferenced = db.transaction(() => {
     db.prepare("DELETE FROM post WHERE space_uri = ? AND author_did = ?").run(
       input.spaceUri,
       input.authorDid,
@@ -255,9 +278,12 @@ export function replaceRepoRecords(input: {
 
     const insertPost = db.prepare(`
       INSERT INTO post(
-        uri, cid, space_uri, author_did, text, color, rotation, x, y, created_at, indexed_at
+        uri, cid, space_uri, author_did, text,
+        image_cid, image_mime, image_size, image_alt,
+        color, rotation, x, y, created_at, indexed_at
       ) VALUES (
-        @uri, @cid, @spaceUri, @authorDid, @text, @color, @rotation,
+        @uri, @cid, @spaceUri, @authorDid, @text,
+        @imageCid, @imageMime, @imageSize, @imageAlt, @color, @rotation,
         @x, @y, @createdAt, @indexedAt
       )
     `);
@@ -270,6 +296,10 @@ export function replaceRepoRecords(input: {
         y: post.y ?? null,
         color: post.color ?? null,
         rotation: post.rotation ?? null,
+        imageCid: post.image?.cid ?? null,
+        imageMime: post.image?.mimeType ?? null,
+        imageSize: post.image?.size ?? null,
+        imageAlt: post.image?.alt ?? null,
         indexedAt: new Date().toISOString(),
       });
     }
@@ -311,7 +341,11 @@ export function replaceRepoRecords(input: {
         indexedAt: new Date().toISOString(),
       });
     }
+
+    for (const blob of input.blobs ?? []) insertSpaceBlob(db, blob);
+    return pruneSpaceBlobs(db, input.spaceUri, input.authorDid);
   })();
+  deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
 export function upsertPost(input: {
@@ -320,6 +354,7 @@ export function upsertPost(input: {
   spaceUri: string;
   authorDid: string;
   text: string;
+  image?: NoteImage;
   color?: NoteColor;
   rotation?: number;
   x?: number;
@@ -329,14 +364,21 @@ export function upsertPost(input: {
   getDb()
     .prepare(
       `INSERT INTO post(
-         uri, cid, space_uri, author_did, text, color, rotation, x, y, created_at, indexed_at
+         uri, cid, space_uri, author_did, text,
+         image_cid, image_mime, image_size, image_alt,
+         color, rotation, x, y, created_at, indexed_at
        ) VALUES (
-         @uri, @cid, @spaceUri, @authorDid, @text, @color, @rotation,
+         @uri, @cid, @spaceUri, @authorDid, @text,
+         @imageCid, @imageMime, @imageSize, @imageAlt, @color, @rotation,
          @x, @y, @createdAt, @indexedAt
        )
        ON CONFLICT(uri) DO UPDATE SET
          cid = excluded.cid,
          text = excluded.text,
+         image_cid = excluded.image_cid,
+         image_mime = excluded.image_mime,
+         image_size = excluded.image_size,
+         image_alt = excluded.image_alt,
          color = excluded.color,
          rotation = excluded.rotation,
          x = excluded.x,
@@ -350,6 +392,10 @@ export function upsertPost(input: {
       y: input.y ?? null,
       color: input.color ?? null,
       rotation: input.rotation ?? null,
+      imageCid: input.image?.cid ?? null,
+      imageMime: input.image?.mimeType ?? null,
+      imageSize: input.image?.size ?? null,
+      imageAlt: input.image?.alt ?? null,
       indexedAt: new Date().toISOString(),
     });
 }
@@ -359,7 +405,9 @@ export function getPost(uri: string): StoredPost | null {
     (getDb()
       .prepare(
         `SELECT uri, cid, space_uri AS spaceUri, author_did AS authorDid,
-                text, color, rotation, x, y, created_at AS createdAt
+                text, image_cid AS imageCid, image_mime AS imageMime,
+                image_size AS imageSize, image_alt AS imageAlt,
+                color, rotation, x, y, created_at AS createdAt
          FROM post WHERE uri = ?`,
       )
       .get(uri) as StoredPost | undefined) ?? null
@@ -367,7 +415,17 @@ export function getPost(uri: string): StoredPost | null {
 }
 
 export function deleteStoredPost(uri: string): void {
-  getDb().prepare("DELETE FROM post WHERE uri = ?").run(uri);
+  const db = getDb();
+  const dereferenced = db.transaction(() => {
+    const row = db
+      .prepare(
+        "SELECT space_uri AS spaceUri, author_did AS authorDid FROM post WHERE uri = ?",
+      )
+      .get(uri) as { spaceUri: string; authorDid: string } | undefined;
+    db.prepare("DELETE FROM post WHERE uri = ?").run(uri);
+    return row ? pruneSpaceBlobs(db, row.spaceUri, row.authorDid) : [];
+  })();
+  deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
 export function upsertPosition(input: {
@@ -402,7 +460,13 @@ export function upsertPosition(input: {
 }
 
 export type SyncedChange =
-  | { kind: "delete"; table: "post" | "moderation_label" | "note_position"; uri: string }
+  | {
+      kind: "delete";
+      table: "post" | "moderation_label" | "note_position";
+      uri: string;
+      spaceUri: string;
+      authorDid: string;
+    }
   | {
       kind: "post";
       value: {
@@ -411,6 +475,7 @@ export type SyncedChange =
         spaceUri: string;
         authorDid: string;
         text: string;
+        image?: NoteImage;
         color?: NoteColor;
         rotation?: number;
         x?: number;
@@ -447,9 +512,13 @@ export type SyncedChange =
       };
     };
 
-export function applySyncedChanges(changes: SyncedChange[]): void {
+export function applySyncedChanges(
+  changes: SyncedChange[],
+  blobs: SpaceBlob[] = [],
+): void {
   const db = getDb();
-  db.transaction(() => {
+  const dereferenced = db.transaction(() => {
+    for (const blob of blobs) insertSpaceBlob(db, blob);
     for (const change of changes) {
       if (change.kind === "delete") {
         db.prepare(`DELETE FROM ${change.table} WHERE uri = ?`).run(change.uri);
@@ -461,7 +530,22 @@ export function applySyncedChanges(changes: SyncedChange[]): void {
         upsertPosition(change.value);
       }
     }
+    const affected = new Set<string>();
+    for (const blob of blobs) affected.add(`${blob.spaceUri}\u0000${blob.repoDid}`);
+    for (const change of changes) {
+      if (change.kind === "post" || (change.kind === "delete" && change.table === "post")) {
+        const value = change.kind === "post" ? change.value : change;
+        affected.add(`${value.spaceUri}\u0000${value.authorDid}`);
+      }
+    }
+    const cids: string[] = [];
+    for (const key of affected) {
+      const [spaceUri, authorDid] = key.split("\u0000");
+      cids.push(...pruneSpaceBlobs(db, spaceUri, authorDid));
+    }
+    return cids;
   })();
+  deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
 export function upsertLabel(input: {
@@ -510,6 +594,10 @@ export function listBoardPosts(
          p.author_did AS authorDid,
          a.handle AS authorHandle,
          p.text,
+         p.image_cid AS imageCid,
+         p.image_mime AS imageMime,
+         p.image_size AS imageSize,
+         p.image_alt AS imageAlt,
          p.color,
          p.rotation,
          COALESCE(np.x, p.x) AS x,
@@ -562,6 +650,102 @@ export function listBoardPosts(
       hidden: row.hidden === 1,
     };
   });
+}
+
+export function getSpaceBlob(
+  spaceUri: string,
+  repoDid: string,
+  cid: string,
+): SpaceBlob | null {
+  const row = getDb()
+    .prepare(
+      `SELECT space_uri AS spaceUri, repo_did AS repoDid, cid,
+              mime_type AS mimeType, size
+       FROM space_blob
+       WHERE space_uri = ? AND repo_did = ? AND cid = ?`,
+    )
+    .get(spaceUri, repoDid, cid) as SpaceBlob | undefined;
+  return row ?? null;
+}
+
+export function getReferencedSpaceBlob(
+  spaceUri: string,
+  repoDid: string,
+  cid: string,
+): SpaceBlob | null {
+  const blob = getSpaceBlob(spaceUri, repoDid, cid);
+  if (!blob) return null;
+  const referenced = getDb()
+    .prepare(
+      `SELECT 1 FROM post
+       WHERE space_uri = ? AND author_did = ? AND image_cid = ?
+       LIMIT 1`,
+    )
+    .get(spaceUri, repoDid, cid);
+  return referenced ? blob : null;
+}
+
+function insertSpaceBlob(db: ReturnType<typeof getDb>, blob: SpaceBlob): void {
+  db.prepare(
+    `INSERT INTO space_blob(
+       space_uri, repo_did, cid, mime_type, size, updated_at
+     ) VALUES (
+       @spaceUri, @repoDid, @cid, @mimeType, @size, @updatedAt
+     )
+     ON CONFLICT(space_uri, repo_did, cid) DO UPDATE SET
+       mime_type = excluded.mime_type,
+       size = excluded.size,
+       updated_at = excluded.updated_at`,
+  ).run({
+    ...blob,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function pruneSpaceBlobs(
+  db: ReturnType<typeof getDb>,
+  spaceUri: string,
+  repoDid: string,
+): string[] {
+  const cids = db
+    .prepare(
+      `SELECT cid FROM space_blob
+       WHERE space_uri = ? AND repo_did = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM post
+           WHERE post.space_uri = space_blob.space_uri
+             AND post.author_did = space_blob.repo_did
+             AND post.image_cid = space_blob.cid
+         )`,
+    )
+    .all(spaceUri, repoDid)
+    .map((row) => (row as { cid: string }).cid);
+  db.prepare(
+    `DELETE FROM space_blob
+     WHERE space_uri = ? AND repo_did = ?
+       AND NOT EXISTS (
+         SELECT 1 FROM post
+         WHERE post.space_uri = space_blob.space_uri
+           AND post.author_did = space_blob.repo_did
+           AND post.image_cid = space_blob.cid
+       )`,
+  ).run(spaceUri, repoDid);
+  return cids;
+}
+
+function deleteUnreferencedBlobFiles(
+  db: ReturnType<typeof getDb>,
+  cids: string[],
+): void {
+  const hasReference = db.prepare("SELECT 1 FROM space_blob WHERE cid = ? LIMIT 1");
+  for (const cid of new Set(cids)) {
+    if (hasReference.get(cid)) continue;
+    try {
+      deleteBlobFile(cid);
+    } catch (error) {
+      console.error(`Could not delete dereferenced image ${cid}`, error);
+    }
+  }
 }
 
 function fallbackPosition(uri: string): { x: number; y: number } {

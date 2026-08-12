@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 
-const DATABASE_PATH = process.env.DATABASE_PATH ?? "bulletin.db";
+export const DATABASE_PATH = process.env.DATABASE_PATH ?? "bulletin.db";
 
 let database: Database.Database | undefined;
 

@@ -30,6 +30,7 @@ export const SYNC_SERVICE = `${SYNC_SERVICE_DID}#bulletin-sync`;
 export const OAUTH_SCOPE = [
   "atproto",
   "repo:app.bsky.graph.follow",
+  "blob?accept=image/jpeg&accept=image/png&accept=image/webp",
   `include:${BULLETIN_PERMISSION_SET}`,
 ].join(" ");
 
