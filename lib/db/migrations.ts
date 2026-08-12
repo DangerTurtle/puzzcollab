@@ -234,6 +234,21 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 11,
+    up(db) {
+      db.exec(`
+        CREATE TABLE web_session (
+          token_hash TEXT PRIMARY KEY,
+          did TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL
+        );
+
+        CREATE INDEX web_session_did_idx ON web_session(did);
+      `);
+    },
+  },
 ];
 
 export function migrate(): void {

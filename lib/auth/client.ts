@@ -4,7 +4,8 @@ import {
   type NodeSavedSession,
   type NodeSavedState,
 } from "@atproto/oauth-client-node";
-import { PLC_URL } from "../config";
+import { isIP } from "node:net";
+import { APP_UI_URL, PLC_URL } from "../config";
 import { resolveHandle } from "../atproto/identity";
 import { getDb } from "../db";
 import { getClientMetadata } from "./metadata";
@@ -16,7 +17,7 @@ export async function getOAuthClient(): Promise<NodeOAuthClient> {
 
   oauthClient = new NodeOAuthClient({
     clientMetadata: getClientMetadata(),
-    allowHttp: true,
+    allowHttp: isLoopbackApp(),
     plcDirectoryUrl: PLC_URL,
     handleResolver: {
       async resolve(handle) {
@@ -28,6 +29,16 @@ export async function getOAuthClient(): Promise<NodeOAuthClient> {
   });
 
   return oauthClient;
+}
+
+function isLoopbackApp(): boolean {
+  const hostname = new URL(APP_UI_URL).hostname;
+  const unwrapped = hostname.replace(/^\[|\]$/g, "");
+  return (
+    hostname === "localhost" ||
+    unwrapped === "::1" ||
+    (isIP(unwrapped) === 4 && unwrapped.startsWith("127."))
+  );
 }
 
 export function listStoredSessionDids(): string[] {

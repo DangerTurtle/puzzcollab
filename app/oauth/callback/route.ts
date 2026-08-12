@@ -1,5 +1,12 @@
 import { cacheIdentity } from "@/lib/atproto/identity";
 import { getOAuthClient } from "@/lib/auth/client";
+import {
+  createWebSession,
+  deleteWebSession,
+  LEGACY_SESSION_COOKIE_NAME,
+  WEB_SESSION_COOKIE_NAME,
+  webSessionCookieOptions,
+} from "@/lib/auth/web-session";
 import { APP_UI_URL } from "@/lib/config";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,13 +18,16 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams,
     );
     await cacheIdentity(session.did);
+    const previousToken = request.cookies.get(WEB_SESSION_COOKIE_NAME)?.value;
+    if (previousToken) deleteWebSession(previousToken);
+    const token = createWebSession(session.did);
     const response = NextResponse.redirect(APP_UI_URL);
-    response.cookies.set("bulletin-did", session.did, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    response.cookies.set(
+      WEB_SESSION_COOKIE_NAME,
+      token,
+      webSessionCookieOptions(),
+    );
+    response.cookies.delete(LEGACY_SESSION_COOKIE_NAME);
     return response;
   } catch (error) {
     console.error(error);

@@ -1,17 +1,23 @@
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import { cookies } from "next/headers";
 import { getOAuthClient } from "./client";
-
-export async function getDid(): Promise<string | null> {
-  return (await cookies()).get("bulletin-did")?.value ?? null;
-}
+import {
+  deleteWebSession,
+  resolveWebSession,
+  WEB_SESSION_COOKIE_NAME,
+} from "./web-session";
 
 export async function getSession(): Promise<OAuthSession | null> {
-  const did = await getDid();
+  const token = (await cookies()).get(WEB_SESSION_COOKIE_NAME)?.value;
+  if (!token) return null;
+  const did = resolveWebSession(token);
   if (!did) return null;
   try {
-    return await (await getOAuthClient()).restore(did);
+    const session = await (await getOAuthClient()).restore(did);
+    if (session.did !== did) throw new Error("OAuth session subject mismatch");
+    return session;
   } catch {
+    deleteWebSession(token);
     return null;
   }
 }
