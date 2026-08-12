@@ -39,18 +39,26 @@ export function Composer({
       form.set("image", image);
       form.set("imageAlt", imageAlt);
     }
-    const response = await fetch("/api/posts", {
-      method: "POST",
-      body: form,
-    });
-    const body = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(body.error ?? "Could not pin note");
+    try {
+      const response = await fetch("/api/posts", {
+        method: "POST",
+        body: form,
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? "Could not pin note");
+      }
+      setText("");
+      window.location.reload();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Could not pin note",
+      );
+    } finally {
       setBusy(false);
-      return;
     }
-    setText("");
-    window.location.reload();
   }
 
   return (

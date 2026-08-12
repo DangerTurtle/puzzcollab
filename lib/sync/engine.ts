@@ -511,7 +511,7 @@ export class SyncEngine {
   }
 }
 
-function parseChange(input: {
+export function parseChange(input: {
   space: string;
   repoDid: string;
   collection: string;
@@ -531,7 +531,7 @@ function parseChange(input: {
       }
     : undefined;
   if (!input.cid) return deletion;
-  if (!input.value || typeof input.value !== "object") return undefined;
+  if (!input.value || typeof input.value !== "object") return deletion;
   const value = input.value as Record<string, unknown>;
   const createdAt = typeof value.createdAt === "string" ? value.createdAt : undefined;
 

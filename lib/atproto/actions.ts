@@ -12,6 +12,7 @@ import {
   deleteStoredPost,
   applySyncedChanges,
   getPost,
+  hasBoard,
   saveBoard,
   upsertLabel,
   upsertPost,
@@ -68,6 +69,7 @@ export async function createPost(
     alt: string | null;
   },
 ): Promise<string> {
+  if (!hasBoard(ownerDid)) throw new Error("Board does not exist");
   await assertCanWrite(session.did, ownerDid);
   const space = boardUri(ownerDid);
   const createdAt = new Date().toISOString();

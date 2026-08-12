@@ -5,6 +5,7 @@ import {
   isBlobRef,
   parseCid,
 } from "@atproto/lex-data";
+import { BlobRef } from "@atproto/api";
 
 export const MAX_NOTE_IMAGE_BYTES = 500_000;
 export const MAX_NOTE_IMAGE_ALT_LENGTH = 300;
@@ -31,10 +32,11 @@ export function parseNoteImage(
   image: unknown,
   alt: unknown,
 ): NoteImage | null {
-  if (!isBlobRef(image)) return null;
-  const cid = getBlobCidString(image);
-  const mimeType = getBlobMime(image);
-  const size = getBlobSize(image);
+  const value = image instanceof BlobRef ? image.ipld() : image;
+  if (!isBlobRef(value)) return null;
+  const cid = getBlobCidString(value);
+  const mimeType = getBlobMime(value);
+  const size = getBlobSize(value);
   if (
     !cid ||
     !isNoteImageMime(mimeType) ||
@@ -44,7 +46,7 @@ export function parseNoteImage(
   ) {
     return null;
   }
-  if (alt !== undefined && typeof alt !== "string") return null;
+  if (alt !== undefined && alt !== null && typeof alt !== "string") return null;
   const normalizedAlt = typeof alt === "string" ? alt.trim() : "";
   if (Array.from(normalizedAlt).length > MAX_NOTE_IMAGE_ALT_LENGTH) return null;
   return { cid, mimeType, size, alt: normalizedAlt || null };
