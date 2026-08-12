@@ -16,7 +16,7 @@ import {
   upsertPost,
   upsertPosition,
 } from "../db/queries";
-import { userFollows } from "./follows";
+import { getRelationship, userFollows } from "./follows";
 import type { NoteColor } from "../note-style";
 
 export async function createBoard(session: OAuthSession): Promise<string> {
@@ -230,11 +230,8 @@ export async function labelPost(
 
 async function assertCanWrite(userDid: string, ownerDid: string): Promise<void> {
   if (userDid === ownerDid) return;
-  const [followsOwner, followedByOwner] = await Promise.all([
-    userFollows(userDid, ownerDid),
-    userFollows(ownerDid, userDid),
-  ]);
-  if (!followsOwner || !followedByOwner) {
+  const relationship = await getRelationship(userDid, ownerDid);
+  if (!relationship.follows || !relationship.followedBy) {
     throw new Error("Only mutual followers can post");
   }
 }

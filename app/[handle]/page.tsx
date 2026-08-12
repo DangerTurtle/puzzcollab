@@ -3,8 +3,8 @@ import { FollowGate } from "@/components/FollowGate";
 import { Header } from "@/components/Header";
 import { LoginForm } from "@/components/LoginForm";
 import { SpatialBoard } from "@/components/SpatialBoard";
-import { userFollows } from "@/lib/atproto/follows";
-import { getProfileAvatarUrl } from "@/lib/atproto/profile";
+import { getRelationship, type Relationship } from "@/lib/atproto/follows";
+import { getProfile } from "@/lib/atproto/profile";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
 import { getSession } from "@/lib/auth/session";
 import { boardUri } from "@/lib/config";
@@ -70,32 +70,39 @@ export default async function BoardPage({
     );
   }
 
-  let accessError: string | undefined;
+  let relationship: Relationship | undefined;
+  if (!ownBoard) {
+    try {
+      relationship = await getRelationship(session.did, ownerDid);
+    } catch (error) {
+      console.error("Could not check board access", error);
+      return (
+        <BoardUnavailable
+          viewerDid={session.did}
+          ownerHandle={owner?.handle}
+        />
+      );
+    }
+    if (!relationship.follows) {
+      return (
+        <main className="shell">
+          <Header did={session.did} />
+          <section className="board-head">
+            <div className="eyebrow">Followers-only board</div>
+            <h1>{owner?.handle ? `@${owner.handle}` : "Someone’s board"}</h1>
+          </section>
+          <FollowGate ownerDid={ownerDid} ownerHandle={owner?.handle} />
+        </main>
+      );
+    }
+  }
+
   try {
     await watchBoard(space, session.did);
   } catch (error) {
     console.error("Could not open board", error);
-    accessError = error instanceof Error ? error.message : "Access denied";
-  }
-
-  if (accessError && !ownBoard) {
-    const follows = await userFollows(session.did, ownerDid).catch(() => false);
     return (
-      <main className="shell">
-        <Header did={session.did} />
-        <section className="board-head">
-          <div className="eyebrow">Followers-only board</div>
-          <h1>{owner?.handle ? `@${owner.handle}` : "Someone’s board"}</h1>
-        </section>
-        {follows ? (
-          <div className="card gate">
-            <h2>The board couldn’t be opened</h2>
-            <p>Something went wrong. Give it a moment and try again.</p>
-          </div>
-        ) : (
-          <FollowGate ownerDid={ownerDid} ownerHandle={owner?.handle} />
-        )}
-      </main>
+      <BoardUnavailable viewerDid={session.did} ownerHandle={owner?.handle} />
     );
   }
 
@@ -104,18 +111,13 @@ export default async function BoardPage({
   const displayedPosts = posts.filter(
     (post) => !post.hidden || post.authorDid === session.did,
   );
-  const avatarEntries = await Promise.all(
+  const profileEntries = await Promise.all(
     [...new Set(displayedPosts.map((post) => post.authorDid))].map(
-      async (did) => [did, await getProfileAvatarUrl(did)] as const,
+      async (did) => [did, await getProfile(did)] as const,
     ),
   );
-  const avatars = new Map(avatarEntries);
-  const canWrite =
-    ownBoard ||
-    (await Promise.all([
-      userFollows(session.did, ownerDid).catch(() => false),
-      userFollows(ownerDid, session.did).catch(() => false),
-    ])).every(Boolean);
+  const profiles = new Map(profileEntries);
+  const canWrite = ownBoard || Boolean(relationship?.followedBy);
 
   return (
     <main className="shell">
@@ -143,13 +145,37 @@ export default async function BoardPage({
             .join("|")}
           initialPosts={displayedPosts.map((post) => ({
             ...post,
+            authorHandle:
+              profiles.get(post.authorDid)?.handle ?? post.authorHandle,
             displayDate: formatDate(post.createdAt),
-            authorAvatar: avatars.get(post.authorDid) ?? null,
+            authorAvatar: profiles.get(post.authorDid)?.avatar ?? null,
           }))}
           ownerDid={ownerDid}
           viewerDid={session.did}
           canWrite={canWrite}
         />
+      </div>
+    </main>
+  );
+}
+
+function BoardUnavailable({
+  viewerDid,
+  ownerHandle,
+}: {
+  viewerDid: string;
+  ownerHandle: string | null | undefined;
+}) {
+  return (
+    <main className="shell">
+      <Header did={viewerDid} />
+      <section className="board-head">
+        <div className="eyebrow">Followers-only board</div>
+        <h1>{ownerHandle ? `@${ownerHandle}` : "Someone’s board"}</h1>
+      </section>
+      <div className="card gate">
+        <h2>The board couldn’t be opened</h2>
+        <p>Something went wrong. Give it a moment and try again.</p>
       </div>
     </main>
   );

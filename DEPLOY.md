@@ -54,6 +54,7 @@ APP_UI_URL=https://bulletin.dholms.at
 DATABASE_PATH=/data/bulletin.db
 PLC_URL=https://plc.directory
 HANDLE_RESOLVER_URL=https://public.api.bsky.app
+BSKY_URL=https://public.api.bsky.app
 MANAGING_APP_DID=did:web:bulletin.dholms.at
 SYNC_URL=http://127.0.0.1:3001
 SYNC_PUBLIC_URL=https://bulletin.dholms.at/sync

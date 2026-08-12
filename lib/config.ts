@@ -10,6 +10,8 @@ export const DEV_PLC_URL =
   process.env.DEV_PLC_URL ?? "http://localhost:2582";
 export const PLC_URL = process.env.PLC_URL ?? DEV_PLC_URL;
 export const HANDLE_RESOLVER_URL = process.env.HANDLE_RESOLVER_URL;
+export const BSKY_URL =
+  process.env.BSKY_URL ?? "https://public.api.bsky.app";
 
 export const SPACE_TYPE = "at.dholms.bulletin.board";
 export const POST_COLLECTION = "at.dholms.bulletin.post";
