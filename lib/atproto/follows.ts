@@ -27,6 +27,34 @@ export async function getRelationship(
   };
 }
 
+export async function getFollowersAmong(
+  actorDid: string,
+  otherDids: string[],
+): Promise<Set<string>> {
+  const followers = new Set<string>();
+  const uniqueOthers = [...new Set(otherDids)].filter(
+    (did) => did !== actorDid,
+  );
+
+  for (let offset = 0; offset < uniqueOthers.length; offset += 30) {
+    const others = uniqueOthers.slice(offset, offset + 30);
+    const response = await getBskyAgent().app.bsky.graph.getRelationships(
+      { actor: actorDid, others },
+      { signal: AbortSignal.timeout(2500) },
+    );
+    for (const relationship of response.data.relationships) {
+      if (
+        AppBskyGraphDefs.isRelationship(relationship) &&
+        relationship.followedBy
+      ) {
+        followers.add(relationship.did);
+      }
+    }
+  }
+
+  return followers;
+}
+
 export async function userFollows(
   userDid: string,
   ownerDid: string,

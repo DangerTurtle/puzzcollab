@@ -28,7 +28,6 @@ export type StoredPost = Omit<
 
 export type SpaceWatch = {
   spaceUri: string;
-  viewerDid: string;
   authorityDid: string;
   registrationExpiresAt: string | null;
   lastError: string | null;
@@ -107,15 +106,13 @@ export function listBoards(): Array<{
 
 export function saveSpaceWatch(input: {
   spaceUri: string;
-  viewerDid: string;
   authorityDid: string;
 }): void {
   getDb()
     .prepare(
-      `INSERT INTO sync_space(space_uri, viewer_did, authority_did, updated_at)
-       VALUES (@spaceUri, @viewerDid, @authorityDid, @updatedAt)
+      `INSERT INTO sync_space(space_uri, authority_did, updated_at)
+       VALUES (@spaceUri, @authorityDid, @updatedAt)
        ON CONFLICT(space_uri) DO UPDATE SET
-         viewer_did = excluded.viewer_did,
          authority_did = excluded.authority_did,
          updated_at = excluded.updated_at`,
     )
@@ -125,8 +122,7 @@ export function saveSpaceWatch(input: {
 export function listSpaceWatches(): SpaceWatch[] {
   return getDb()
     .prepare(
-      `SELECT space_uri AS spaceUri, viewer_did AS viewerDid,
-              authority_did AS authorityDid,
+      `SELECT space_uri AS spaceUri, authority_did AS authorityDid,
               registration_expires_at AS registrationExpiresAt,
               last_error AS lastError
        FROM sync_space`,

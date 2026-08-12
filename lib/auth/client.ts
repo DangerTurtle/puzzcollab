@@ -30,6 +30,13 @@ export async function getOAuthClient(): Promise<NodeOAuthClient> {
   return oauthClient;
 }
 
+export function listStoredSessionDids(): string[] {
+  return getDb()
+    .prepare("SELECT key FROM auth_session ORDER BY rowid")
+    .all()
+    .map((row) => (row as { key: string }).key);
+}
+
 function sqliteStore<T>(table: "auth_state" | "auth_session") {
   return {
     async get(key: string): Promise<T | undefined> {

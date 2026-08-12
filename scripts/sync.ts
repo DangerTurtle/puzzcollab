@@ -53,10 +53,10 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/watch") {
       const body = await readJson(request);
-      if (typeof body.space !== "string" || typeof body.viewerDid !== "string") {
+      if (typeof body.space !== "string") {
         return json(response, 400, { error: "Invalid board subscription" });
       }
-      await engine.watch(body.space, body.viewerDid);
+      await engine.watch(body.space);
       return json(response, 200, { ok: true });
     }
     if (

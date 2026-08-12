@@ -23,13 +23,15 @@ import {
   type SpaceWatch,
   type SyncedChange,
 } from "../db/queries";
-import { getOAuthClient } from "../auth/client";
+import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { isNoteColor, isNoteRotation } from "../note-style";
 import { getIdResolver, resolvePds } from "../atproto/identity";
+import { getFollowersAmong } from "../atproto/follows";
 import {
   mintSpaceCredential,
   type SpaceCredential,
 } from "../atproto/space-credential";
+import { orderCredentialCandidates } from "./credential-candidates";
 
 type NotifyInput = { space: string; repo: string; rev: string };
 type OnChange = (space: string) => void;
@@ -48,9 +50,9 @@ export class SyncEngine {
     );
   }
 
-  async watch(space: string, viewerDid: string): Promise<void> {
+  async watch(space: string): Promise<void> {
     const authorityDid = authorityFromSpace(space);
-    saveSpaceWatch({ spaceUri: space, viewerDid, authorityDid });
+    saveSpaceWatch({ spaceUri: space, authorityDid });
     const watch = listSpaceWatches().find((item) => item.spaceUri === space);
     if (!watch) throw new Error("Could not save board subscription");
     await this.reconcile(watch);
@@ -264,10 +266,46 @@ export class SyncEngine {
       const existing = this.credentials.get(watch.spaceUri);
       if (existing) return existing;
     }
-    const session = await (await getOAuthClient()).restore(watch.viewerDid);
-    const credential = await mintSpaceCredential(session, watch.spaceUri);
-    this.credentials.set(watch.spaceUri, credential);
-    return credential;
+    const sessionDids = listStoredSessionDids();
+    const oauthClient = await getOAuthClient();
+    let lastError: unknown;
+
+    if (sessionDids.includes(watch.authorityDid)) {
+      try {
+        const session = await oauthClient.restore(watch.authorityDid);
+        const credential = await mintSpaceCredential(session, watch.spaceUri);
+        this.credentials.set(watch.spaceUri, credential);
+        return credential;
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `could not mint sync credential for ${watch.authorityDid}`,
+          error,
+        );
+      }
+    }
+
+    const otherDids = sessionDids.filter((did) => did !== watch.authorityDid);
+    const followers = await getFollowersAmong(watch.authorityDid, otherDids);
+    const candidates = orderCredentialCandidates(
+      watch.authorityDid,
+      otherDids,
+      followers,
+    );
+
+    for (const did of candidates) {
+      try {
+        const session = await oauthClient.restore(did);
+        const credential = await mintSpaceCredential(session, watch.spaceUri);
+        this.credentials.set(watch.spaceUri, credential);
+        return credential;
+      } catch (error) {
+        lastError = error;
+        console.warn(`could not mint sync credential for ${did}`, error);
+      }
+    }
+
+    throw lastError ?? new Error("No authorized OAuth session can sync this board");
   }
 
   private enqueue(space: string, repo: string, job: () => Promise<void>): Promise<void> {

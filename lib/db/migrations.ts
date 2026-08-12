@@ -186,6 +186,30 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 9,
+    up(db) {
+      db.exec(`
+        CREATE TABLE sync_space_v9 (
+          space_uri TEXT PRIMARY KEY,
+          authority_did TEXT NOT NULL,
+          registration_expires_at TEXT,
+          last_error TEXT,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO sync_space_v9(
+          space_uri, authority_did, registration_expires_at, last_error, updated_at
+        )
+        SELECT
+          space_uri, authority_did, registration_expires_at, last_error, updated_at
+        FROM sync_space;
+
+        DROP TABLE sync_space;
+        ALTER TABLE sync_space_v9 RENAME TO sync_space;
+      `);
+    },
+  },
 ];
 
 export function migrate(): void {

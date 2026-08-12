@@ -98,12 +98,11 @@ export default async function BoardPage({
   }
 
   try {
-    await watchBoard(space, session.did);
+    await watchBoard(space);
   } catch (error) {
-    console.error("Could not open board", error);
-    return (
-      <BoardUnavailable viewerDid={session.did} ownerHandle={owner?.handle} />
-    );
+    // Read authorization is the relationship check above. A sync outage should
+    // not turn into an access decision; serve the last verified materialization.
+    console.error("Could not refresh board", error);
   }
 
   const posts = listBoardPosts(space, ownerDid);
