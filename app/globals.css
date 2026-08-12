@@ -226,8 +226,8 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
   transform-origin: 50% 8px;
 }
 .note-image {
-  display: block; width: 100%; max-height: 120px; margin-bottom: 9px;
-  border-radius: 2px; object-fit: cover; background: rgba(255,255,255,.28);
+  display: block; width: auto; height: auto; max-width: 100%; max-height: 120px; margin: 0 auto 9px;
+  border-radius: 2px; object-fit: contain; background: rgba(255,255,255,.28);
 }
 .spatial-note:hover { z-index: 10; }
 .spatial-note.movable { cursor: grab; touch-action: none; }
