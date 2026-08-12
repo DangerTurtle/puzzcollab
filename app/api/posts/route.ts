@@ -3,10 +3,12 @@ import { requireSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { isNoteColor, isNoteRotation } from "@/lib/note-style";
 import {
+  isBoardCoordinate,
   isNoteImageMime,
   MAX_NOTE_IMAGE_ALT_LENGTH,
   MAX_NOTE_IMAGE_BYTES,
-} from "@/lib/note-image";
+  MAX_NOTE_TEXT_LENGTH,
+} from "@/lib/note-constraints";
 
 export const runtime = "nodejs";
 
@@ -20,16 +22,17 @@ export async function POST(request: NextRequest) {
     const x = numberValue(body.get("x"));
     const y = numberValue(body.get("y"));
     const imageValue = body.get("image");
-    const image = imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
+    const image =
+      imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
     const imageAlt = stringValue(body.get("imageAlt"))?.trim() ?? "";
     if (
       !ownerDid?.startsWith("did:") ||
       !text ||
-      Array.from(text).length > 300 ||
+      Array.from(text).length > MAX_NOTE_TEXT_LENGTH ||
       !isNoteColor(color) ||
       !isNoteRotation(rotation) ||
-      !validCoordinate(x) ||
-      !validCoordinate(y) ||
+      !isBoardCoordinate(x) ||
+      !isBoardCoordinate(y) ||
       (image !== null &&
         (!isNoteImageMime(image.type) ||
           image.size > MAX_NOTE_IMAGE_BYTES ||
@@ -86,10 +89,6 @@ export async function DELETE(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function validCoordinate(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1000;
 }
 
 function stringValue(value: FormDataEntryValue | null): string | undefined {

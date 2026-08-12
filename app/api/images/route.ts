@@ -2,7 +2,7 @@ import { getRelationship } from "@/lib/atproto/follows";
 import { requireSession } from "@/lib/auth/session";
 import { boardUri } from "@/lib/config";
 import { getReferencedSpaceBlob } from "@/lib/db/queries";
-import { isNoteImageMime } from "@/lib/note-image";
+import { isNoteImageMime } from "@/lib/note-constraints";
 import { readBlobFile } from "@/lib/blob-store";
 import { NextRequest, NextResponse } from "next/server";
 

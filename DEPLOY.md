@@ -28,7 +28,7 @@ last command again whenever a Lexicon changes.
 ## 2. Check the build
 
 ```sh
-pnpm lint
+pnpm check
 pnpm build
 ```
 

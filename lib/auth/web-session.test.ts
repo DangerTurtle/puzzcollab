@@ -3,14 +3,14 @@ import test from "node:test";
 
 process.env.DATABASE_PATH = ":memory:";
 
-const { migrate } = await import("../db/migrations.ts");
-const { getDb } = await import("../db/index.ts");
+const { migrate } = await import("../db/migrations");
+const { getDb } = await import("../db/index");
 const {
   createWebSession,
   deleteWebSession,
   resolveWebSession,
   WEB_SESSION_MAX_AGE_SECONDS,
-} = await import("./web-session.ts");
+} = await import("./web-session");
 
 migrate();
 

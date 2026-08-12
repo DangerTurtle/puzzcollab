@@ -28,6 +28,7 @@ import {
 import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { isNoteColor, isNoteRotation } from "../note-style";
 import { parseNoteImage } from "../note-image";
+import { isBoardCoordinate } from "../note-constraints";
 import { readBlobFile, storeBlobFile } from "../blob-store";
 import { getIdResolver, resolvePds } from "../atproto/identity";
 import { getFollowersAmong } from "../atproto/follows";
@@ -612,7 +613,7 @@ export function parseChange(input: {
 function parsePosition(value: unknown): { x: number; y: number } | undefined {
   if (!value || typeof value !== "object") return undefined;
   const position = value as { x?: unknown; y?: unknown };
-  return validCoordinate(position.x) && validCoordinate(position.y)
+  return isBoardCoordinate(position.x) && isBoardCoordinate(position.y)
     ? { x: position.x, y: position.y }
     : undefined;
 }
@@ -637,10 +638,6 @@ function tableForCollection(
   if (collection === LABEL_COLLECTION) return "moderation_label";
   if (collection === POSITION_COLLECTION) return "note_position";
   return undefined;
-}
-
-function validCoordinate(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1000;
 }
 
 function authorityFromSpace(space: string): string {

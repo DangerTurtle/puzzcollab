@@ -20,13 +20,11 @@ import {
 } from "../db/queries";
 import { getRelationship, userFollows } from "./follows";
 import type { NoteColor } from "../note-style";
+import { noteImageBlobRef, parseNoteImage, type NoteImage } from "../note-image";
 import {
   isNoteImageMime,
   MAX_NOTE_IMAGE_BYTES,
-  noteImageBlobRef,
-  parseNoteImage,
-  type NoteImage,
-} from "../note-image";
+} from "../note-constraints";
 import { storeBlobFile } from "../blob-store";
 
 export async function createBoard(session: OAuthSession): Promise<string> {

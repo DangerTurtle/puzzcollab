@@ -3,6 +3,7 @@
 import type { BoardPost } from "@/lib/db/queries";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { BOARD_COORDINATE_MAX } from "@/lib/note-constraints";
 import { Composer } from "./Composer";
 import { ModerationButton } from "./ModerationButton";
 
@@ -49,7 +50,9 @@ export function SpatialBoard({
   const router = useRouter();
 
   useEffect(() => {
-    const events = new EventSource(`/api/events?ownerDid=${encodeURIComponent(ownerDid)}`);
+    const events = new EventSource(
+      `/api/events?ownerDid=${encodeURIComponent(ownerDid)}`,
+    );
     events.onmessage = () => router.refresh();
     return () => events.close();
   }, [ownerDid, router]);
@@ -66,8 +69,12 @@ export function SpatialBoard({
     const localX = event.clientX - bounds.left;
     const localY = event.clientY - bounds.top;
     setComposer({
-      x: clamp(Math.round((localX / bounds.width) * 1000)),
-      y: clamp(Math.round((localY / bounds.height) * 1000)),
+      x: clampPosition(
+        Math.round((localX / bounds.width) * BOARD_COORDINATE_MAX),
+      ),
+      y: clampPosition(
+        Math.round((localY / bounds.height) * BOARD_COORDINATE_MAX),
+      ),
       left: Math.min(Math.max(12, localX - 18), Math.max(12, bounds.width - 322)),
       top: Math.min(Math.max(12, localY - 18), Math.max(12, bounds.height - 374)),
     });
@@ -96,11 +103,19 @@ export function SpatialBoard({
     const board = boardRef.current;
     if (!state || state.pointerId !== event.pointerId || !board) return;
     const bounds = board.getBoundingClientRect();
-    state.x = clamp(
-      Math.round(state.originalX + ((event.clientX - state.startClientX) / bounds.width) * 1000),
+    state.x = clampPosition(
+      Math.round(
+        state.originalX +
+          ((event.clientX - state.startClientX) / bounds.width) *
+            BOARD_COORDINATE_MAX,
+      ),
     );
-    state.y = clamp(
-      Math.round(state.originalY + ((event.clientY - state.startClientY) / bounds.height) * 1000),
+    state.y = clampPosition(
+      Math.round(
+        state.originalY +
+          ((event.clientY - state.startClientY) / bounds.height) *
+            BOARD_COORDINATE_MAX,
+      ),
     );
     setPosts((current) =>
       current.map((post) =>
@@ -176,8 +191,8 @@ export function SpatialBoard({
                 className={`note spatial-note color-${post.color} ${movable ? "movable" : ""} ${activeUri === post.uri ? "dragging" : ""}`}
                 key={post.uri}
                 style={{
-                  left: `${post.x / 10}%`,
-                  top: `${post.y / 10}%`,
+                  left: `${(post.x / BOARD_COORDINATE_MAX) * 100}%`,
+                  top: `${(post.y / BOARD_COORDINATE_MAX) * 100}%`,
                   transform: `rotate(${post.rotation / 10}deg)`,
                 }}
                 onPointerDown={(event) => startDrag(event, post)}
@@ -246,8 +261,8 @@ export function SpatialBoard({
   );
 }
 
-function clamp(value: number): number {
-  return Math.max(0, Math.min(1000, value));
+function clampPosition(value: number): number {
+  return Math.max(0, Math.min(BOARD_COORDINATE_MAX, value));
 }
 
 function avatarLetter(handle: string | null): string {

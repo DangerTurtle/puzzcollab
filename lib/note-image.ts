@@ -6,27 +6,19 @@ import {
   parseCid,
 } from "@atproto/lex-data";
 import { BlobRef } from "@atproto/api";
-
-export const MAX_NOTE_IMAGE_BYTES = 500_000;
-export const MAX_NOTE_IMAGE_ALT_LENGTH = 300;
-export const NOTE_IMAGE_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-] as const;
+import {
+  isNoteImageMime,
+  MAX_NOTE_IMAGE_ALT_LENGTH,
+  MAX_NOTE_IMAGE_BYTES,
+  type NoteImageMimeType,
+} from "./note-constraints";
 
 export type NoteImage = {
   cid: string;
-  mimeType: (typeof NOTE_IMAGE_MIME_TYPES)[number];
+  mimeType: NoteImageMimeType;
   size: number;
   alt: string | null;
 };
-
-export function isNoteImageMime(
-  value: unknown,
-): value is NoteImage["mimeType"] {
-  return NOTE_IMAGE_MIME_TYPES.includes(value as NoteImage["mimeType"]);
-}
 
 export function parseNoteImage(
   image: unknown,

@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { NOTE_COLORS, type NoteColor } from "@/lib/note-style";
+import {
+  MAX_NOTE_IMAGE_ALT_LENGTH,
+  MAX_NOTE_IMAGE_BYTES,
+  MAX_NOTE_TEXT_LENGTH,
+  NOTE_IMAGE_MIME_TYPES,
+} from "@/lib/note-constraints";
 
 export function Composer({
   ownerDid,
@@ -23,7 +29,7 @@ export function Composer({
     event.preventDefault();
     setBusy(true);
     setError(undefined);
-    if (image && image.size > 500_000) {
+    if (image && image.size > MAX_NOTE_IMAGE_BYTES) {
       setError("Choose an image smaller than 500 KB");
       setBusy(false);
       return;
@@ -82,7 +88,7 @@ export function Composer({
       <textarea
         className={`field composer-note color-${color}`}
         value={text}
-        maxLength={300}
+        maxLength={MAX_NOTE_TEXT_LENGTH}
         onChange={(event) => setText(event.target.value)}
         placeholder="Leave something for the board…"
         autoFocus
@@ -104,17 +110,17 @@ export function Composer({
             </label>
           ))}
         </fieldset>
-        <span>{text.length}/300</span>
+        <span>{text.length}/{MAX_NOTE_TEXT_LENGTH}</span>
       </div>
       <div className="composer-image-fields">
         <label className="composer-image-picker">
           <span>{image ? "Change image" : "Add an image"}</span>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={NOTE_IMAGE_MIME_TYPES.join(",")}
             onChange={(event) => {
               const next = event.target.files?.[0];
-              if (next && next.size > 500_000) {
+              if (next && next.size > MAX_NOTE_IMAGE_BYTES) {
                 setImage(undefined);
                 setError("Choose an image smaller than 500 KB");
                 event.target.value = "";
@@ -131,7 +137,7 @@ export function Composer({
             <input
               className="field composer-image-alt"
               value={imageAlt}
-              maxLength={300}
+              maxLength={MAX_NOTE_IMAGE_ALT_LENGTH}
               onChange={(event) => setImageAlt(event.target.value)}
               placeholder="Describe the image (optional)"
               aria-label="Image description"

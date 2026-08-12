@@ -10,6 +10,8 @@
     "railway:start": "pnpm migrate && node --import tsx scripts/start-all.ts",
     "sync": "pnpm migrate && node --import tsx scripts/sync.ts",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
     "migrate": "node --import tsx scripts/migrate.ts",
     "publish-lexicons": "node --import tsx scripts/publish-lexicons.ts",
     "test": "node --import tsx --test lib/**/*.test.ts"

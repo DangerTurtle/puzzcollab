@@ -1,5 +1,6 @@
 import { movePost } from "@/lib/atproto/actions";
 import { requireSession } from "@/lib/auth/session";
+import { isBoardCoordinate } from "@/lib/note-constraints";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -17,8 +18,8 @@ export async function POST(request: NextRequest) {
       !body.ownerDid?.startsWith("did:") ||
       !body.postUri ||
       !body.postCid ||
-      !validCoordinate(body.x) ||
-      !validCoordinate(body.y)
+      !isBoardCoordinate(body.x) ||
+      !isBoardCoordinate(body.y)
     ) {
       throw new Error("Invalid note position");
     }
@@ -37,8 +38,4 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function validCoordinate(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1000;
 }
