@@ -22,7 +22,7 @@ export async function resolveDid(did: string, forceRefresh = false) {
 }
 
 export async function resolvePds(did: string): Promise<string> {
-  const cached = getAccount(did)?.pdsUrl;
+  const cached = (await getAccount(did))?.pdsUrl;
   if (cached) return cached;
   const doc = await resolveDid(did);
   const pdsUrl = getPdsEndpoint(doc);
@@ -30,7 +30,7 @@ export async function resolvePds(did: string): Promise<string> {
   const handle = doc.alsoKnownAs
     ?.find((value) => value.startsWith("at://"))
     ?.slice("at://".length);
-  saveAccount({ did, handle, pdsUrl });
+  await saveAccount({ did, handle, pdsUrl });
   return pdsUrl;
 }
 
@@ -89,5 +89,5 @@ export async function cacheIdentity(did: string): Promise<void> {
   const handle = doc.alsoKnownAs
     ?.find((value) => value.startsWith("at://"))
     ?.slice("at://".length);
-  saveAccount({ did, handle, pdsUrl });
+  await saveAccount({ did, handle, pdsUrl });
 }

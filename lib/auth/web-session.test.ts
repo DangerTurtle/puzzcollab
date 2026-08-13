@@ -4,7 +4,7 @@ import test from "node:test";
 process.env.DATABASE_PATH = ":memory:";
 
 const { migrate } = await import("../db/migrations");
-const { getDb } = await import("../db/index");
+const { getQueryDb } = await import("../db/index");
 const {
   createWebSession,
   deleteWebSession,
@@ -12,39 +12,43 @@ const {
   WEB_SESSION_MAX_AGE_SECONDS,
 } = await import("./web-session");
 
-migrate();
+await migrate();
 
-test("an opaque session token resolves to its DID", () => {
+test("an opaque session token resolves to its DID", async () => {
   const did = "did:plc:alice";
-  const token = createWebSession(did);
+  const token = await createWebSession(did);
 
   assert.equal(token.length, 43);
-  assert.equal(resolveWebSession(token), did);
-  assert.equal(resolveWebSession(did), null);
+  assert.equal(await resolveWebSession(token), did);
+  assert.equal(await resolveWebSession(did), null);
 
-  const stored = getDb()
-    .prepare("SELECT token_hash AS tokenHash FROM web_session WHERE did = ?")
-    .get(did) as { tokenHash: string };
+  const stored = await getQueryDb()
+    .selectFrom("webSession")
+    .select("tokenHash")
+    .where("did", "=", did)
+    .executeTakeFirstOrThrow();
   assert.notEqual(stored.tokenHash, token);
 });
 
-test("expired sessions are rejected", () => {
-  const token = createWebSession("did:plc:expired");
-  getDb()
-    .prepare("UPDATE web_session SET expires_at = ? WHERE did = ?")
-    .run(new Date(0).toISOString(), "did:plc:expired");
+test("expired sessions are rejected", async () => {
+  const token = await createWebSession("did:plc:expired");
+  await getQueryDb()
+    .updateTable("webSession")
+    .set({ expiresAt: new Date(0).toISOString() })
+    .where("did", "=", "did:plc:expired")
+    .execute();
 
-  assert.equal(resolveWebSession(token), null);
-  assert.equal(deleteWebSession(token), null);
+  assert.equal(await resolveWebSession(token), null);
+  assert.equal(await deleteWebSession(token), null);
 });
 
-test("deleting a session returns its DID and prevents reuse", () => {
+test("deleting a session returns its DID and prevents reuse", async () => {
   const did = "did:plc:bob";
-  const token = createWebSession(did);
+  const token = await createWebSession(did);
 
-  assert.equal(deleteWebSession(token), did);
-  assert.equal(deleteWebSession(token), null);
-  assert.equal(resolveWebSession(token), null);
+  assert.equal(await deleteWebSession(token), did);
+  assert.equal(await deleteWebSession(token), null);
+  assert.equal(await resolveWebSession(token), null);
 });
 
 test("session lifetime remains seven days", () => {

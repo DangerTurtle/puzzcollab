@@ -1,4 +1,4 @@
 import { migrate } from "../lib/db/migrations";
 
-migrate();
+await migrate();
 console.log("database is ready");

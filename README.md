@@ -40,7 +40,7 @@ Lexicons to the test network's Lexicon authority before starting Next.js.
 - `app/xrpc/com.atproto.simplespace.checkUserAccess`: managing-app callback
 - `lib/atproto/space-credential.ts`: delegation, credential exchange, and DPoP
 - `lib/sync/engine.ts`: multi-PDS writer discovery and materialization
-- `lib/db`: SQLite state, OAuth storage, posts, and in-space labels
+- `lib/db`: Kysely-backed SQLite state, OAuth storage, posts, and labels
 - `lexicons/at/dholms`: board, post, position, label, and permission declarations
 
 This is intentionally local-first. The app uses a loopback OAuth client and the

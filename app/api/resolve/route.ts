@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
   try {
     const did = await resolveIdentifier(identifier);
     await cacheIdentity(did).catch(() => undefined);
-    if (!hasBoard(did)) {
+    if (!(await hasBoard(did))) {
       return NextResponse.json(
         { error: `@${identifier.replace(/^@/, "")} does not have a Bulletin board yet` },
         { status: 404 },
       );
     }
-    const handle = getAccount(did)?.handle;
+    const handle = (await getAccount(did))?.handle;
     if (!handle) {
       return NextResponse.json({ error: "That account has no handle" }, { status: 404 });
     }

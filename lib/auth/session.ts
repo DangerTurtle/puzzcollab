@@ -10,14 +10,14 @@ import {
 export async function getSession(): Promise<OAuthSession | null> {
   const token = (await cookies()).get(WEB_SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  const did = resolveWebSession(token);
+  const did = await resolveWebSession(token);
   if (!did) return null;
   try {
     const session = await (await getOAuthClient()).restore(did);
     if (session.did !== did) throw new Error("OAuth session subject mismatch");
     return session;
   } catch {
-    deleteWebSession(token);
+    await deleteWebSession(token);
     return null;
   }
 }

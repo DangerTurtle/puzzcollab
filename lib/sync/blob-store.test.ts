@@ -18,19 +18,19 @@ test("deletes a blob file after its last note reference is removed", async () =>
   ]);
 
   try {
-    migrate();
+    await migrate();
     const bytes = new Uint8Array([1, 2, 3]);
     const cid = (await cidForRawBytes(bytes)).toString();
     const first = post("did:plc:first", "one", cid);
     const second = post("did:plc:second", "two", cid);
 
-    queries.applySyncedChanges(
+    await queries.applySyncedChanges(
       [first.change, second.change],
       [first.blob, second.blob],
     );
     blobStore.storeBlobFile(cid, bytes);
 
-    queries.applySyncedChanges([
+    await queries.applySyncedChanges([
       {
         ...first.change,
         value: {
@@ -42,7 +42,7 @@ test("deletes a blob file after its last note reference is removed", async () =>
     ]);
     assert.deepEqual(blobStore.readBlobFile(cid), bytes);
 
-    queries.deleteStoredPost(second.change.value.uri);
+    await queries.deleteStoredPost(second.change.value.uri);
     assert.equal(blobStore.readBlobFile(cid), null);
   } finally {
     database.getDb().close();

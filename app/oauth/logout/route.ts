@@ -13,10 +13,10 @@ export const runtime = "nodejs";
 export async function POST() {
   const cookieStore = await cookies();
   const token = cookieStore.get(WEB_SESSION_COOKIE_NAME)?.value;
-  const did = token ? deleteWebSession(token) : null;
+  const did = token ? await deleteWebSession(token) : null;
   if (did) {
     await (await getOAuthClient()).revoke(did).catch(() => undefined);
-    deleteWebSessionsForDid(did);
+    await deleteWebSessionsForDid(did);
   }
   cookieStore.delete(WEB_SESSION_COOKIE_NAME);
   cookieStore.delete(LEGACY_SESSION_COOKIE_NAME);

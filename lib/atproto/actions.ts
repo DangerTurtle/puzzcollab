@@ -40,7 +40,7 @@ export async function createBoard(session: OAuthSession): Promise<string> {
       $type: "com.atproto.simplespace.defs#open",
     },
   });
-  saveBoard(result.data.uri, session.did);
+  await saveBoard(result.data.uri, session.did);
   return result.data.uri;
 }
 
@@ -67,7 +67,7 @@ export async function createPost(
     alt: string | null;
   },
 ): Promise<string> {
-  if (!hasBoard(ownerDid)) throw new Error("Board does not exist");
+  if (!(await hasBoard(ownerDid))) throw new Error("Board does not exist");
   await assertCanWrite(session.did, ownerDid);
   const space = boardUri(ownerDid);
   const createdAt = new Date().toISOString();
@@ -120,7 +120,7 @@ export async function createPost(
         size: image.size,
       }
     : undefined;
-  applySyncedChanges(
+  await applySyncedChanges(
     [
       {
         kind: "post",
@@ -160,7 +160,7 @@ export async function movePost(
     y: number;
   },
 ): Promise<string> {
-  const post = getPost(input.postUri);
+  const post = await getPost(input.postUri);
   const space = boardUri(input.ownerDid);
   if (!post || post.spaceUri !== space || post.cid !== input.postCid) {
     throw new Error("That note has changed");
@@ -191,7 +191,7 @@ export async function movePost(
         createdAt: post.createdAt,
       },
     });
-    upsertPost({
+    await upsertPost({
       ...post,
       cid: result.data.cid,
       color: post.color ?? undefined,
@@ -216,7 +216,7 @@ export async function movePost(
       createdAt,
     },
   });
-  upsertPosition({
+  await upsertPosition({
     uri: result.data.uri,
     cid: result.data.cid,
     spaceUri: space,
@@ -234,7 +234,7 @@ export async function deleteOwnPost(
   session: OAuthSession,
   input: { ownerDid: string; postUri: string; postCid: string },
 ): Promise<void> {
-  const post = getPost(input.postUri);
+  const post = await getPost(input.postUri);
   const space = boardUri(input.ownerDid);
   if (!post || post.spaceUri !== space || post.cid !== input.postCid) {
     throw new Error("That note has changed");
@@ -250,7 +250,7 @@ export async function deleteOwnPost(
     collection: POST_COLLECTION,
     rkey: postRkey(post.uri, space, post.authorDid),
   });
-  deleteStoredPost(post.uri);
+  await deleteStoredPost(post.uri);
 }
 
 export async function labelPost(
@@ -281,7 +281,7 @@ export async function labelPost(
       createdAt,
     },
   });
-  upsertLabel({
+  await upsertLabel({
     uri: result.data.uri,
     cid: result.data.cid,
     spaceUri: space,
@@ -311,7 +311,9 @@ function postRkey(uri: string, space: string, authorDid: string): string {
   return rkey;
 }
 
-function storedPostImage(post: ReturnType<typeof getPost>): NoteImage | undefined {
+function storedPostImage(
+  post: Awaited<ReturnType<typeof getPost>>,
+): NoteImage | undefined {
   if (!post?.imageCid || !isNoteImageMime(post.imageMime) || post.imageSize === null) {
     return undefined;
   }

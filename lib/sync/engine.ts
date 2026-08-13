@@ -59,10 +59,11 @@ export class SyncEngine {
   constructor(private readonly onChange: OnChange) {}
 
   async resume(): Promise<void> {
+    const watches = await listSpaceWatches();
     await Promise.all(
-      listSpaceWatches().map((watch) =>
-        this.reconcile(watch).catch((error) => {
-          this.recordError(watch.spaceUri, error);
+      watches.map((watch) =>
+        this.reconcile(watch).catch(async (error) => {
+          await this.recordError(watch.spaceUri, error);
           this.scheduleRegistrationRetry(watch);
         }),
       ),
@@ -72,13 +73,15 @@ export class SyncEngine {
   async watch(space: string): Promise<void> {
     if (this.deletedSpaces.has(space)) throw new Error("Space has been deleted");
     const authorityDid = authorityFromSpace(space);
-    saveSpaceWatch({ spaceUri: space, authorityDid });
-    const watch = listSpaceWatches().find((item) => item.spaceUri === space);
+    await saveSpaceWatch({ spaceUri: space, authorityDid });
+    const watch = (await listSpaceWatches()).find(
+      (item) => item.spaceUri === space,
+    );
     if (!watch) throw new Error("Could not save board subscription");
     try {
       await this.reconcile(watch);
     } catch (error) {
-      this.recordError(watch.spaceUri, error);
+      await this.recordError(watch.spaceUri, error);
       this.scheduleRegistrationRetry(watch);
       throw error;
     }
@@ -86,7 +89,9 @@ export class SyncEngine {
 
   async notify(input: NotifyInput): Promise<void> {
     if (this.deletedSpaces.has(input.space)) return;
-    const watch = listSpaceWatches().find((item) => item.spaceUri === input.space);
+    const watch = (await listSpaceWatches()).find(
+      (item) => item.spaceUri === input.space,
+    );
     if (!watch) return;
     await this.enqueue(input.space, input.repo, async () => {
       if (this.deletedSpaces.has(input.space)) return;
@@ -96,13 +101,13 @@ export class SyncEngine {
     });
   }
 
-  deleteSpace(space: string): void {
+  async deleteSpace(space: string): Promise<void> {
     this.deletedSpaces.add(space);
     this.credentials.delete(space);
     const timer = this.registrationTimers.get(space);
     if (timer) clearTimeout(timer);
     this.registrationTimers.delete(space);
-    deleteSyncedSpace(space);
+    await deleteSyncedSpace(space);
     this.onChange(space);
   }
 
@@ -123,7 +128,7 @@ export class SyncEngine {
           service: SYNC_SERVICE,
         });
         registrationExpiresAt = registered.data.expiresAt;
-        updateSpaceWatch({
+        await updateSpaceWatch({
           spaceUri: watch.spaceUri,
           registrationExpiresAt,
           lastError: null,
@@ -142,7 +147,7 @@ export class SyncEngine {
         });
         for (const repo of page.data.repos) {
           if (this.deletedSpaces.has(watch.spaceUri)) return;
-          const local = getSyncedRepo(watch.spaceUri, repo.did);
+          const local = await getSyncedRepo(watch.spaceUri, repo.did);
           if (!local || local.rev !== repo.rev) {
             await this.enqueue(watch.spaceUri, repo.did, () =>
               this.syncRepoWithCredential(watch, repo.did, credential),
@@ -154,8 +159,8 @@ export class SyncEngine {
       } while (cursor);
 
       if (this.deletedSpaces.has(watch.spaceUri)) return;
-      saveBoard(watch.spaceUri, watch.authorityDid);
-      updateSpaceWatch({ spaceUri: watch.spaceUri, lastError: null });
+      await saveBoard(watch.spaceUri, watch.authorityDid);
+      await updateSpaceWatch({ spaceUri: watch.spaceUri, lastError: null });
       if (changed) this.onChange(watch.spaceUri);
     });
   }
@@ -175,7 +180,7 @@ export class SyncEngine {
         service: SYNC_SERVICE,
       });
       if (this.deletedSpaces.has(watch.spaceUri)) return;
-      updateSpaceWatch({
+      await updateSpaceWatch({
         spaceUri: watch.spaceUri,
         registrationExpiresAt: registered.data.expiresAt,
         lastError: null,
@@ -207,10 +212,12 @@ export class SyncEngine {
 
     const timer = setTimeout(() => {
       this.registrationTimers.delete(watch.spaceUri);
-      void this.renewRegistration(watch).catch((error) => {
-        this.recordError(watch.spaceUri, error);
-        this.scheduleRegistrationRetry(watch);
-      });
+      void this.renewRegistration(watch)
+        .catch(async (error) => {
+          await this.recordError(watch.spaceUri, error);
+          this.scheduleRegistrationRetry(watch);
+        })
+        .catch((error) => console.error("could not record sync error", error));
     }, delay);
     timer.unref();
     this.registrationTimers.set(watch.spaceUri, timer);
@@ -222,7 +229,7 @@ export class SyncEngine {
     credential: SpaceCredential,
   ): Promise<void> {
     if (this.deletedSpaces.has(watch.spaceUri)) return;
-    const local = getSyncedRepo(watch.spaceUri, repoDid);
+    const local = await getSyncedRepo(watch.spaceUri, repoDid);
     if (!local) {
       await this.recoverRepo(watch.spaceUri, repoDid, credential);
       return;
@@ -281,9 +288,9 @@ export class SyncEngine {
         credential,
       );
       if (this.deletedSpaces.has(watch.spaceUri)) return;
-      applySyncedChanges(changes, stripBlobBytes(blobs));
+      await applySyncedChanges(changes, stripBlobBytes(blobs));
       storeBlobFiles(blobs);
-      saveSyncedRepo({
+      await saveSyncedRepo({
         spaceUri: watch.spaceUri,
         repoDid,
         pdsUrl: local.pdsUrl,
@@ -341,7 +348,7 @@ export class SyncEngine {
 
     const blobs = await this.fetchImageBlobs(postChanges, pdsUrl, credential);
     if (this.deletedSpaces.has(space)) return;
-    replaceRepoRecords({
+    await replaceRepoRecords({
       spaceUri: space,
       authorDid: repoDid,
       posts,
@@ -350,7 +357,7 @@ export class SyncEngine {
       blobs: stripBlobBytes(blobs),
     });
     storeBlobFiles(blobs);
-    saveSyncedRepo({
+    await saveSyncedRepo({
       spaceUri: space,
       repoDid,
       pdsUrl,
@@ -423,14 +430,14 @@ export class SyncEngine {
       try {
         credential = await this.credentialFor(watch, attempt > 0);
       } catch (error) {
-        if (isSpaceDeletedError(error)) this.deleteSpace(watch.spaceUri);
+        if (isSpaceDeletedError(error)) await this.deleteSpace(watch.spaceUri);
         throw error;
       }
       try {
         return await operation(credential);
       } catch (error) {
         if (isSpaceDeletedError(error)) {
-          this.deleteSpace(watch.spaceUri);
+          await this.deleteSpace(watch.spaceUri);
           throw error;
         }
         if (attempt > 0) throw error;
@@ -448,7 +455,7 @@ export class SyncEngine {
       const existing = this.credentials.get(watch.spaceUri);
       if (existing) return existing;
     }
-    const sessionDids = listStoredSessionDids();
+    const sessionDids = await listStoredSessionDids();
     const oauthClient = await getOAuthClient();
     let lastError: unknown;
 
@@ -503,9 +510,9 @@ export class SyncEngine {
     return next;
   }
 
-  private recordError(space: string, error: unknown): void {
+  private async recordError(space: string, error: unknown): Promise<void> {
     console.error(`sync failed for ${space}`, error);
-    updateSpaceWatch({
+    await updateSpaceWatch({
       spaceUri: space,
       lastError: error instanceof Error ? error.message : "Sync failed",
     });

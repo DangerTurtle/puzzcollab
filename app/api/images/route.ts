@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const blob = getReferencedSpaceBlob(space, repoDid, cid);
+  const blob = await getReferencedSpaceBlob(space, repoDid, cid);
   if (!blob || !isNoteImageMime(blob.mimeType)) {
     return new NextResponse("Not found", { status: 404 });
   }

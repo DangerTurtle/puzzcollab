@@ -3,10 +3,10 @@ import Link from "next/link";
 import { BoardFinder } from "./BoardFinder";
 import { LogoutButton } from "./LogoutButton";
 
-export function Header({ did }: { did?: string | null }) {
-  const handle = did ? getAccount(did)?.handle : null;
+export async function Header({ did }: { did?: string | null }) {
+  const handle = did ? (await getAccount(did))?.handle : null;
   const knownBoards = did
-    ? listBoards().filter((board) => board.ownerDid !== did)
+    ? (await listBoards()).filter((board) => board.ownerDid !== did)
     : [];
   return (
     <header className="topbar">

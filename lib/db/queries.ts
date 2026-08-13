@@ -1,7 +1,11 @@
-import { getDb } from "./index";
-import { fallbackNoteStyle, type NoteColor } from "../note-style";
-import type { NoteImage } from "../note-image";
+import { sql, type Kysely } from "kysely";
 import { deleteBlobFile } from "../blob-store";
+import type { NoteImage } from "../note-image";
+import { fallbackNoteStyle, type NoteColor } from "../note-style";
+import { getQueryDb } from "./index";
+import type { DatabaseSchema } from "./schema";
+
+type DatabaseConnection = Kysely<DatabaseSchema>;
 
 export type BoardPost = {
   uri: string;
@@ -56,299 +60,7 @@ export type SpaceBlob = {
   size: number;
 };
 
-export function saveAccount(input: {
-  did: string;
-  handle?: string | null;
-  pdsUrl?: string | null;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO account(did, handle, pds_url, updated_at)
-       VALUES (@did, @handle, @pdsUrl, @updatedAt)
-       ON CONFLICT(did) DO UPDATE SET
-         handle = COALESCE(excluded.handle, account.handle),
-         pds_url = COALESCE(excluded.pds_url, account.pds_url),
-         updated_at = excluded.updated_at`,
-    )
-    .run({ ...input, updatedAt: new Date().toISOString() });
-}
-
-export function getAccount(did: string): {
-  did: string;
-  handle: string | null;
-  pdsUrl: string | null;
-} | null {
-  return (
-    (getDb()
-      .prepare(
-        "SELECT did, handle, pds_url AS pdsUrl FROM account WHERE did = ?",
-      )
-      .get(did) as
-      | { did: string; handle: string | null; pdsUrl: string | null }
-      | undefined) ?? null
-  );
-}
-
-export function saveBoard(spaceUri: string, ownerDid: string): void {
-  getDb()
-    .prepare(
-      `INSERT INTO board(space_uri, owner_did, created_at) VALUES (?, ?, ?)
-       ON CONFLICT(space_uri) DO NOTHING`,
-    )
-    .run(spaceUri, ownerDid, new Date().toISOString());
-}
-
-export function hasBoard(ownerDid: string): boolean {
-  return Boolean(
-    getDb().prepare("SELECT 1 FROM board WHERE owner_did = ?").get(ownerDid),
-  );
-}
-
-export function listBoards(): Array<{
-  ownerDid: string;
-  handle: string | null;
-}> {
-  return getDb()
-    .prepare(
-      `SELECT b.owner_did AS ownerDid, a.handle
-       FROM board b
-       LEFT JOIN account a ON a.did = b.owner_did
-       ORDER BY COALESCE(a.handle, b.owner_did)`,
-    )
-    .all() as Array<{ ownerDid: string; handle: string | null }>;
-}
-
-export function saveSpaceWatch(input: {
-  spaceUri: string;
-  authorityDid: string;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO sync_space(space_uri, authority_did, updated_at)
-       VALUES (@spaceUri, @authorityDid, @updatedAt)
-       ON CONFLICT(space_uri) DO UPDATE SET
-         authority_did = excluded.authority_did,
-         updated_at = excluded.updated_at`,
-    )
-    .run({ ...input, updatedAt: new Date().toISOString() });
-}
-
-export function listSpaceWatches(): SpaceWatch[] {
-  return getDb()
-    .prepare(
-      `SELECT space_uri AS spaceUri, authority_did AS authorityDid,
-              registration_expires_at AS registrationExpiresAt,
-              last_error AS lastError
-       FROM sync_space`,
-    )
-    .all() as SpaceWatch[];
-}
-
-export function deleteSyncedSpace(spaceUri: string): void {
-  const db = getDb();
-  const dereferenced = db.transaction(() => {
-    const cids = db
-      .prepare("SELECT cid FROM space_blob WHERE space_uri = ?")
-      .all(spaceUri)
-      .map((row) => (row as { cid: string }).cid);
-    db.prepare("DELETE FROM space_blob WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM note_position WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM moderation_label WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM post WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM sync_repo WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM sync_space WHERE space_uri = ?").run(spaceUri);
-    db.prepare("DELETE FROM board WHERE space_uri = ?").run(spaceUri);
-    return cids;
-  })();
-  deleteUnreferencedBlobFiles(db, dereferenced);
-}
-
-export function updateSpaceWatch(input: {
-  spaceUri: string;
-  registrationExpiresAt?: string | null;
-  lastError?: string | null;
-}): void {
-  getDb()
-    .prepare(
-      `UPDATE sync_space SET
-         registration_expires_at = COALESCE(@registrationExpiresAt, registration_expires_at),
-         last_error = @lastError,
-         updated_at = @updatedAt
-       WHERE space_uri = @spaceUri`,
-    )
-    .run({
-      spaceUri: input.spaceUri,
-      registrationExpiresAt: input.registrationExpiresAt ?? null,
-      lastError: input.lastError ?? null,
-      updatedAt: new Date().toISOString(),
-    });
-}
-
-export function getSyncedRepo(spaceUri: string, repoDid: string): SyncedRepo | null {
-  const row = getDb()
-    .prepare(
-      `SELECT space_uri AS spaceUri, repo_did AS repoDid, pds_url AS pdsUrl,
-              rev, lthash AS ltHash, commit_hash AS commitHash
-       FROM sync_repo WHERE space_uri = ? AND repo_did = ?`,
-    )
-    .get(spaceUri, repoDid) as
-    | Omit<SyncedRepo, "ltHash" | "commitHash"> & {
-        ltHash: Buffer;
-        commitHash: Buffer;
-      }
-    | undefined;
-  return row
-    ? {
-        ...row,
-        ltHash: new Uint8Array(row.ltHash),
-        commitHash: new Uint8Array(row.commitHash),
-      }
-    : null;
-}
-
-export function saveSyncedRepo(input: SyncedRepo): void {
-  getDb()
-    .prepare(
-      `INSERT INTO sync_repo(
-         space_uri, repo_did, pds_url, rev, lthash, commit_hash, updated_at
-       ) VALUES (
-         @spaceUri, @repoDid, @pdsUrl, @rev, @ltHash, @commitHash, @updatedAt
-       )
-       ON CONFLICT(space_uri, repo_did) DO UPDATE SET
-         pds_url = excluded.pds_url,
-         rev = excluded.rev,
-         lthash = excluded.lthash,
-         commit_hash = excluded.commit_hash,
-         updated_at = excluded.updated_at`,
-    )
-    .run({
-      ...input,
-      ltHash: Buffer.from(input.ltHash),
-      commitHash: Buffer.from(input.commitHash),
-      updatedAt: new Date().toISOString(),
-    });
-}
-
-export function replaceRepoRecords(input: {
-  spaceUri: string;
-  authorDid: string;
-  posts: Array<{
-    uri: string;
-    cid: string;
-    text: string;
-    image?: NoteImage;
-    color?: NoteColor;
-    rotation?: number;
-    x?: number;
-    y?: number;
-    createdAt: string;
-  }>;
-  labels: Array<{
-    uri: string;
-    cid: string;
-    subjectUri: string;
-    subjectCid?: string;
-    val: string;
-    neg: boolean;
-    createdAt: string;
-  }>;
-  positions: Array<{
-    uri: string;
-    cid: string;
-    subjectUri: string;
-    subjectCid: string;
-    x: number;
-    y: number;
-    createdAt: string;
-  }>;
-  blobs?: SpaceBlob[];
-}): void {
-  const db = getDb();
-  const dereferenced = db.transaction(() => {
-    db.prepare("DELETE FROM post WHERE space_uri = ? AND author_did = ?").run(
-      input.spaceUri,
-      input.authorDid,
-    );
-    db.prepare(
-      "DELETE FROM moderation_label WHERE space_uri = ? AND author_did = ?",
-    ).run(input.spaceUri, input.authorDid);
-    db.prepare(
-      "DELETE FROM note_position WHERE space_uri = ? AND author_did = ?",
-    ).run(input.spaceUri, input.authorDid);
-
-    const insertPost = db.prepare(`
-      INSERT INTO post(
-        uri, cid, space_uri, author_did, text,
-        image_cid, image_mime, image_size, image_alt,
-        color, rotation, x, y, created_at, indexed_at
-      ) VALUES (
-        @uri, @cid, @spaceUri, @authorDid, @text,
-        @imageCid, @imageMime, @imageSize, @imageAlt, @color, @rotation,
-        @x, @y, @createdAt, @indexedAt
-      )
-    `);
-    for (const post of input.posts) {
-      insertPost.run({
-        ...post,
-        spaceUri: input.spaceUri,
-        authorDid: input.authorDid,
-        x: post.x ?? null,
-        y: post.y ?? null,
-        color: post.color ?? null,
-        rotation: post.rotation ?? null,
-        imageCid: post.image?.cid ?? null,
-        imageMime: post.image?.mimeType ?? null,
-        imageSize: post.image?.size ?? null,
-        imageAlt: post.image?.alt ?? null,
-        indexedAt: new Date().toISOString(),
-      });
-    }
-
-    const insertLabel = db.prepare(`
-      INSERT INTO moderation_label(
-        uri, cid, space_uri, author_did, subject_uri, subject_cid,
-        val, neg, created_at, indexed_at
-      ) VALUES (
-        @uri, @cid, @spaceUri, @authorDid, @subjectUri, @subjectCid,
-        @val, @neg, @createdAt, @indexedAt
-      )
-    `);
-    for (const label of input.labels) {
-      insertLabel.run({
-        ...label,
-        spaceUri: input.spaceUri,
-        authorDid: input.authorDid,
-        subjectCid: label.subjectCid ?? null,
-        neg: label.neg ? 1 : 0,
-        indexedAt: new Date().toISOString(),
-      });
-    }
-
-    const insertPosition = db.prepare(`
-      INSERT INTO note_position(
-        uri, cid, space_uri, author_did, subject_uri, subject_cid,
-        x, y, created_at, indexed_at
-      ) VALUES (
-        @uri, @cid, @spaceUri, @authorDid, @subjectUri, @subjectCid,
-        @x, @y, @createdAt, @indexedAt
-      )
-    `);
-    for (const position of input.positions) {
-      insertPosition.run({
-        ...position,
-        spaceUri: input.spaceUri,
-        authorDid: input.authorDid,
-        indexedAt: new Date().toISOString(),
-      });
-    }
-
-    for (const blob of input.blobs ?? []) insertSpaceBlob(db, blob);
-    return pruneSpaceBlobs(db, input.spaceUri, input.authorDid);
-  })();
-  deleteUnreferencedBlobFiles(db, dereferenced);
-}
-
-export function upsertPost(input: {
+type PostInput = {
   uri: string;
   cid: string;
   spaceUri: string;
@@ -360,75 +72,21 @@ export function upsertPost(input: {
   x?: number;
   y?: number;
   createdAt: string;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO post(
-         uri, cid, space_uri, author_did, text,
-         image_cid, image_mime, image_size, image_alt,
-         color, rotation, x, y, created_at, indexed_at
-       ) VALUES (
-         @uri, @cid, @spaceUri, @authorDid, @text,
-         @imageCid, @imageMime, @imageSize, @imageAlt, @color, @rotation,
-         @x, @y, @createdAt, @indexedAt
-       )
-       ON CONFLICT(uri) DO UPDATE SET
-         cid = excluded.cid,
-         text = excluded.text,
-         image_cid = excluded.image_cid,
-         image_mime = excluded.image_mime,
-         image_size = excluded.image_size,
-         image_alt = excluded.image_alt,
-         color = excluded.color,
-         rotation = excluded.rotation,
-         x = excluded.x,
-         y = excluded.y,
-         created_at = excluded.created_at,
-         indexed_at = excluded.indexed_at`,
-    )
-    .run({
-      ...input,
-      x: input.x ?? null,
-      y: input.y ?? null,
-      color: input.color ?? null,
-      rotation: input.rotation ?? null,
-      imageCid: input.image?.cid ?? null,
-      imageMime: input.image?.mimeType ?? null,
-      imageSize: input.image?.size ?? null,
-      imageAlt: input.image?.alt ?? null,
-      indexedAt: new Date().toISOString(),
-    });
-}
+};
 
-export function getPost(uri: string): StoredPost | null {
-  return (
-    (getDb()
-      .prepare(
-        `SELECT uri, cid, space_uri AS spaceUri, author_did AS authorDid,
-                text, image_cid AS imageCid, image_mime AS imageMime,
-                image_size AS imageSize, image_alt AS imageAlt,
-                color, rotation, x, y, created_at AS createdAt
-         FROM post WHERE uri = ?`,
-      )
-      .get(uri) as StoredPost | undefined) ?? null
-  );
-}
+type LabelInput = {
+  uri: string;
+  cid: string;
+  spaceUri: string;
+  authorDid: string;
+  subjectUri: string;
+  subjectCid?: string;
+  val: string;
+  neg: boolean;
+  createdAt: string;
+};
 
-export function deleteStoredPost(uri: string): void {
-  const db = getDb();
-  const dereferenced = db.transaction(() => {
-    const row = db
-      .prepare(
-        "SELECT space_uri AS spaceUri, author_did AS authorDid FROM post WHERE uri = ?",
-      )
-      .get(uri) as { spaceUri: string; authorDid: string } | undefined;
-    db.prepare("DELETE FROM post WHERE uri = ?").run(uri);
-    return row ? pruneSpaceBlobs(db, row.spaceUri, row.authorDid) : [];
-  })();
-  deleteUnreferencedBlobFiles(db, dereferenced);
-}
-
-export function upsertPosition(input: {
+type PositionInput = {
   uri: string;
   cid: string;
   spaceUri: string;
@@ -438,25 +96,322 @@ export function upsertPosition(input: {
   x: number;
   y: number;
   createdAt: string;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO note_position(
-         uri, cid, space_uri, author_did, subject_uri, subject_cid,
-         x, y, created_at, indexed_at
-       ) VALUES (
-         @uri, @cid, @spaceUri, @authorDid, @subjectUri, @subjectCid,
-         @x, @y, @createdAt, @indexedAt
-       )
-       ON CONFLICT(uri) DO UPDATE SET
-         cid = excluded.cid,
-         subject_cid = excluded.subject_cid,
-         x = excluded.x,
-         y = excluded.y,
-         created_at = excluded.created_at,
-         indexed_at = excluded.indexed_at`,
+};
+
+export async function saveAccount(input: {
+  did: string;
+  handle?: string | null;
+  pdsUrl?: string | null;
+}): Promise<void> {
+  await getQueryDb()
+    .insertInto("account")
+    .values({
+      did: input.did,
+      handle: input.handle ?? null,
+      pdsUrl: input.pdsUrl ?? null,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflict((conflict) =>
+      conflict.column("did").doUpdateSet((eb) => ({
+        handle: eb.fn.coalesce("excluded.handle", "account.handle"),
+        pdsUrl: eb.fn.coalesce("excluded.pdsUrl", "account.pdsUrl"),
+        updatedAt: eb.ref("excluded.updatedAt"),
+      })),
     )
-    .run({ ...input, indexedAt: new Date().toISOString() });
+    .execute();
+}
+
+export async function getAccount(did: string): Promise<{
+  did: string;
+  handle: string | null;
+  pdsUrl: string | null;
+} | null> {
+  const row = await getQueryDb()
+    .selectFrom("account")
+    .select(["did", "handle", "pdsUrl"])
+    .where("did", "=", did)
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+export async function saveBoard(
+  spaceUri: string,
+  ownerDid: string,
+): Promise<void> {
+  await getQueryDb()
+    .insertInto("board")
+    .values({ spaceUri, ownerDid, createdAt: new Date().toISOString() })
+    .onConflict((conflict) => conflict.column("spaceUri").doNothing())
+    .execute();
+}
+
+export async function hasBoard(ownerDid: string): Promise<boolean> {
+  const row = await getQueryDb()
+    .selectFrom("board")
+    .select("ownerDid")
+    .where("ownerDid", "=", ownerDid)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+export async function listBoards(): Promise<
+  Array<{ ownerDid: string; handle: string | null }>
+> {
+  return getQueryDb()
+    .selectFrom("board")
+    .leftJoin("account", "account.did", "board.ownerDid")
+    .select(["board.ownerDid", "account.handle"])
+    .orderBy((eb) => eb.fn.coalesce("account.handle", "board.ownerDid"))
+    .execute();
+}
+
+export async function saveSpaceWatch(input: {
+  spaceUri: string;
+  authorityDid: string;
+}): Promise<void> {
+  await getQueryDb()
+    .insertInto("syncSpace")
+    .values({
+      ...input,
+      registrationExpiresAt: null,
+      lastError: null,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflict((conflict) =>
+      conflict.column("spaceUri").doUpdateSet((eb) => ({
+        authorityDid: eb.ref("excluded.authorityDid"),
+        updatedAt: eb.ref("excluded.updatedAt"),
+      })),
+    )
+    .execute();
+}
+
+export async function listSpaceWatches(): Promise<SpaceWatch[]> {
+  return getQueryDb()
+    .selectFrom("syncSpace")
+    .select([
+      "spaceUri",
+      "authorityDid",
+      "registrationExpiresAt",
+      "lastError",
+    ])
+    .execute();
+}
+
+export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
+  const db = getQueryDb();
+  const dereferenced = await db.transaction().execute(async (trx) => {
+    const blobs = await trx
+      .selectFrom("spaceBlob")
+      .select("cid")
+      .where("spaceUri", "=", spaceUri)
+      .execute();
+    await trx.deleteFrom("spaceBlob").where("spaceUri", "=", spaceUri).execute();
+    await trx
+      .deleteFrom("notePosition")
+      .where("spaceUri", "=", spaceUri)
+      .execute();
+    await trx
+      .deleteFrom("moderationLabel")
+      .where("spaceUri", "=", spaceUri)
+      .execute();
+    await trx.deleteFrom("post").where("spaceUri", "=", spaceUri).execute();
+    await trx.deleteFrom("syncRepo").where("spaceUri", "=", spaceUri).execute();
+    await trx.deleteFrom("syncSpace").where("spaceUri", "=", spaceUri).execute();
+    await trx.deleteFrom("board").where("spaceUri", "=", spaceUri).execute();
+    return blobs.map(({ cid }) => cid);
+  });
+  await deleteUnreferencedBlobFiles(db, dereferenced);
+}
+
+export async function updateSpaceWatch(input: {
+  spaceUri: string;
+  registrationExpiresAt?: string | null;
+  lastError?: string | null;
+}): Promise<void> {
+  await getQueryDb()
+    .updateTable("syncSpace")
+    .set((eb) => ({
+      registrationExpiresAt: eb.fn.coalesce(
+        eb.val(input.registrationExpiresAt ?? null),
+        "syncSpace.registrationExpiresAt",
+      ),
+      lastError: input.lastError ?? null,
+      updatedAt: new Date().toISOString(),
+    }))
+    .where("spaceUri", "=", input.spaceUri)
+    .execute();
+}
+
+export async function getSyncedRepo(
+  spaceUri: string,
+  repoDid: string,
+): Promise<SyncedRepo | null> {
+  const row = await getQueryDb()
+    .selectFrom("syncRepo")
+    .select(["spaceUri", "repoDid", "pdsUrl", "rev", "lthash", "commitHash"])
+    .where("spaceUri", "=", spaceUri)
+    .where("repoDid", "=", repoDid)
+    .executeTakeFirst();
+  if (!row) return null;
+  const { lthash, commitHash, ...repo } = row;
+  return {
+    ...repo,
+    ltHash: new Uint8Array(lthash),
+    commitHash: new Uint8Array(commitHash),
+  };
+}
+
+export async function saveSyncedRepo(input: SyncedRepo): Promise<void> {
+  await getQueryDb()
+    .insertInto("syncRepo")
+    .values({
+      spaceUri: input.spaceUri,
+      repoDid: input.repoDid,
+      pdsUrl: input.pdsUrl,
+      rev: input.rev,
+      lthash: input.ltHash,
+      commitHash: input.commitHash,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflict((conflict) =>
+      conflict.columns(["spaceUri", "repoDid"]).doUpdateSet((eb) => ({
+        pdsUrl: eb.ref("excluded.pdsUrl"),
+        rev: eb.ref("excluded.rev"),
+        lthash: eb.ref("excluded.lthash"),
+        commitHash: eb.ref("excluded.commitHash"),
+        updatedAt: eb.ref("excluded.updatedAt"),
+      })),
+    )
+    .execute();
+}
+
+export async function replaceRepoRecords(input: {
+  spaceUri: string;
+  authorDid: string;
+  posts: Array<Omit<PostInput, "spaceUri" | "authorDid">>;
+  labels: Array<Omit<LabelInput, "spaceUri" | "authorDid">>;
+  positions: Array<Omit<PositionInput, "spaceUri" | "authorDid">>;
+  blobs?: SpaceBlob[];
+}): Promise<void> {
+  const db = getQueryDb();
+  const indexedAt = new Date().toISOString();
+  const dereferenced = await db.transaction().execute(async (trx) => {
+    await trx
+      .deleteFrom("post")
+      .where("spaceUri", "=", input.spaceUri)
+      .where("authorDid", "=", input.authorDid)
+      .execute();
+    await trx
+      .deleteFrom("moderationLabel")
+      .where("spaceUri", "=", input.spaceUri)
+      .where("authorDid", "=", input.authorDid)
+      .execute();
+    await trx
+      .deleteFrom("notePosition")
+      .where("spaceUri", "=", input.spaceUri)
+      .where("authorDid", "=", input.authorDid)
+      .execute();
+
+    if (input.posts.length > 0) {
+      await trx
+        .insertInto("post")
+        .values(
+          input.posts.map((post) =>
+            postValues(
+              {
+                ...post,
+                spaceUri: input.spaceUri,
+                authorDid: input.authorDid,
+              },
+              indexedAt,
+            ),
+          ),
+        )
+        .execute();
+    }
+    if (input.labels.length > 0) {
+      await trx
+        .insertInto("moderationLabel")
+        .values(
+          input.labels.map((label) =>
+            labelValues(
+              {
+                ...label,
+                spaceUri: input.spaceUri,
+                authorDid: input.authorDid,
+              },
+              indexedAt,
+            ),
+          ),
+        )
+        .execute();
+    }
+    if (input.positions.length > 0) {
+      await trx
+        .insertInto("notePosition")
+        .values(
+          input.positions.map((position) => ({
+            ...position,
+            spaceUri: input.spaceUri,
+            authorDid: input.authorDid,
+            indexedAt,
+          })),
+        )
+        .execute();
+    }
+    for (const blob of input.blobs ?? []) {
+      await insertSpaceBlob(trx, blob, indexedAt);
+    }
+    return pruneSpaceBlobs(trx, input.spaceUri, input.authorDid);
+  });
+  await deleteUnreferencedBlobFiles(db, dereferenced);
+}
+
+export async function upsertPost(input: PostInput): Promise<void> {
+  await upsertPostWith(getQueryDb(), input);
+}
+
+export async function getPost(uri: string): Promise<StoredPost | null> {
+  const row = await getQueryDb()
+    .selectFrom("post")
+    .select([
+      "uri",
+      "cid",
+      "spaceUri",
+      "authorDid",
+      "text",
+      "imageCid",
+      "imageMime",
+      "imageSize",
+      "imageAlt",
+      "color",
+      "rotation",
+      "x",
+      "y",
+      "createdAt",
+    ])
+    .where("uri", "=", uri)
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+export async function deleteStoredPost(uri: string): Promise<void> {
+  const db = getQueryDb();
+  const dereferenced = await db.transaction().execute(async (trx) => {
+    const row = await trx
+      .selectFrom("post")
+      .select(["spaceUri", "authorDid"])
+      .where("uri", "=", uri)
+      .executeTakeFirst();
+    await trx.deleteFrom("post").where("uri", "=", uri).execute();
+    return row ? pruneSpaceBlobs(trx, row.spaceUri, row.authorDid) : [];
+  });
+  await deleteUnreferencedBlobFiles(db, dereferenced);
+}
+
+export async function upsertPosition(input: PositionInput): Promise<void> {
+  await upsertPositionWith(getQueryDb(), input);
 }
 
 export type SyncedChange =
@@ -467,178 +422,120 @@ export type SyncedChange =
       spaceUri: string;
       authorDid: string;
     }
-  | {
-      kind: "post";
-      value: {
-        uri: string;
-        cid: string;
-        spaceUri: string;
-        authorDid: string;
-        text: string;
-        image?: NoteImage;
-        color?: NoteColor;
-        rotation?: number;
-        x?: number;
-        y?: number;
-        createdAt: string;
-      };
-    }
-  | {
-      kind: "label";
-      value: {
-        uri: string;
-        cid: string;
-        spaceUri: string;
-        authorDid: string;
-        subjectUri: string;
-        subjectCid?: string;
-        val: string;
-        neg: boolean;
-        createdAt: string;
-      };
-    }
-  | {
-      kind: "position";
-      value: {
-        uri: string;
-        cid: string;
-        spaceUri: string;
-        authorDid: string;
-        subjectUri: string;
-        subjectCid: string;
-        x: number;
-        y: number;
-        createdAt: string;
-      };
-    };
+  | { kind: "post"; value: PostInput }
+  | { kind: "label"; value: LabelInput }
+  | { kind: "position"; value: PositionInput };
 
-export function applySyncedChanges(
+type SyncedDeleteTable = Extract<
+  SyncedChange,
+  { kind: "delete" }
+>["table"];
+
+export async function applySyncedChanges(
   changes: SyncedChange[],
   blobs: SpaceBlob[] = [],
-): void {
-  const db = getDb();
-  const dereferenced = db.transaction(() => {
-    for (const blob of blobs) insertSpaceBlob(db, blob);
+): Promise<void> {
+  const db = getQueryDb();
+  const dereferenced = await db.transaction().execute(async (trx) => {
+    for (const blob of blobs) await insertSpaceBlob(trx, blob);
     for (const change of changes) {
       if (change.kind === "delete") {
-        db.prepare(`DELETE FROM ${change.table} WHERE uri = ?`).run(change.uri);
+        await deleteSyncedRecord(trx, change.table, change.uri);
       } else if (change.kind === "post") {
-        upsertPost(change.value);
+        await upsertPostWith(trx, change.value);
       } else if (change.kind === "label") {
-        upsertLabel(change.value);
+        await upsertLabelWith(trx, change.value);
       } else {
-        upsertPosition(change.value);
+        await upsertPositionWith(trx, change.value);
       }
     }
-    const affected = new Set<string>();
-    for (const blob of blobs) affected.add(`${blob.spaceUri}\u0000${blob.repoDid}`);
+
+    const affected = new Map<string, { spaceUri: string; authorDid: string }>();
+    for (const blob of blobs) {
+      affected.set(`${blob.spaceUri}\u0000${blob.repoDid}`, {
+        spaceUri: blob.spaceUri,
+        authorDid: blob.repoDid,
+      });
+    }
     for (const change of changes) {
-      if (change.kind === "post" || (change.kind === "delete" && change.table === "post")) {
+      if (
+        change.kind === "post" ||
+        (change.kind === "delete" && change.table === "post")
+      ) {
         const value = change.kind === "post" ? change.value : change;
-        affected.add(`${value.spaceUri}\u0000${value.authorDid}`);
+        affected.set(`${value.spaceUri}\u0000${value.authorDid}`, value);
       }
     }
+
     const cids: string[] = [];
-    for (const key of affected) {
-      const [spaceUri, authorDid] = key.split("\u0000");
-      cids.push(...pruneSpaceBlobs(db, spaceUri, authorDid));
+    for (const { spaceUri, authorDid } of affected.values()) {
+      cids.push(...(await pruneSpaceBlobs(trx, spaceUri, authorDid)));
     }
     return cids;
-  })();
-  deleteUnreferencedBlobFiles(db, dereferenced);
+  });
+  await deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
-export function upsertLabel(input: {
-  uri: string;
-  cid: string;
-  spaceUri: string;
-  authorDid: string;
-  subjectUri: string;
-  subjectCid?: string;
-  val: string;
-  neg: boolean;
-  createdAt: string;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO moderation_label(
-         uri, cid, space_uri, author_did, subject_uri, subject_cid,
-         val, neg, created_at, indexed_at
-       ) VALUES (
-         @uri, @cid, @spaceUri, @authorDid, @subjectUri, @subjectCid,
-         @val, @neg, @createdAt, @indexedAt
-       )
-       ON CONFLICT(uri) DO UPDATE SET
-         cid = excluded.cid,
-         neg = excluded.neg,
-         indexed_at = excluded.indexed_at`,
-    )
-    .run({
-      ...input,
-      subjectCid: input.subjectCid ?? null,
-      neg: input.neg ? 1 : 0,
-      indexedAt: new Date().toISOString(),
-    });
+export async function upsertLabel(input: LabelInput): Promise<void> {
+  await upsertLabelWith(getQueryDb(), input);
 }
 
-export function listBoardPosts(
+type BoardPostRow = Omit<BoardPost, "hidden" | "color" | "rotation"> & {
+  x: number | null;
+  y: number | null;
+  color: NoteColor | null;
+  rotation: number | null;
+  hidden: number;
+};
+
+export async function listBoardPosts(
   spaceUri: string,
   authorityDid: string,
-): BoardPost[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT
-         p.uri,
-         p.cid,
-         p.space_uri AS spaceUri,
-         p.author_did AS authorDid,
-         a.handle AS authorHandle,
-         p.text,
-         p.image_cid AS imageCid,
-         p.image_mime AS imageMime,
-         p.image_size AS imageSize,
-         p.image_alt AS imageAlt,
-         p.color,
-         p.rotation,
-         COALESCE(np.x, p.x) AS x,
-         COALESCE(np.y, p.y) AS y,
-         p.created_at AS createdAt,
-         COALESCE((
-           SELECT CASE WHEN l.neg = 0 THEN 1 ELSE 0 END
-           FROM moderation_label l
-           WHERE l.space_uri = p.space_uri
-             AND l.author_did = ?
-             AND l.subject_uri = p.uri
-             AND l.val = 'hide'
-           ORDER BY l.created_at DESC, l.uri DESC
-           LIMIT 1
-         ), 0) AS hidden
-       FROM post p
-       LEFT JOIN account a ON a.did = p.author_did
-       LEFT JOIN note_position np ON np.uri = (
-         SELECT position.uri
-         FROM note_position position
-         WHERE position.space_uri = p.space_uri
-           AND position.author_did = ?
-           AND position.subject_uri = p.uri
-           AND position.subject_cid = p.cid
-         ORDER BY position.created_at DESC, position.uri DESC
-         LIMIT 1
-       )
-       WHERE p.space_uri = ?
-       ORDER BY p.created_at DESC`,
+): Promise<BoardPost[]> {
+  const result = await sql<BoardPostRow>`
+    SELECT
+      p.uri,
+      p.cid,
+      p.space_uri AS spaceUri,
+      p.author_did AS authorDid,
+      a.handle AS authorHandle,
+      p.text,
+      p.image_cid AS imageCid,
+      p.image_mime AS imageMime,
+      p.image_size AS imageSize,
+      p.image_alt AS imageAlt,
+      p.color,
+      p.rotation,
+      COALESCE(np.x, p.x) AS x,
+      COALESCE(np.y, p.y) AS y,
+      p.created_at AS createdAt,
+      COALESCE((
+        SELECT CASE WHEN l.neg = 0 THEN 1 ELSE 0 END
+        FROM moderation_label l
+        WHERE l.space_uri = p.space_uri
+          AND l.author_did = ${authorityDid}
+          AND l.subject_uri = p.uri
+          AND l.val = 'hide'
+        ORDER BY l.created_at DESC, l.uri DESC
+        LIMIT 1
+      ), 0) AS hidden
+    FROM post p
+    LEFT JOIN account a ON a.did = p.author_did
+    LEFT JOIN note_position np ON np.uri = (
+      SELECT position.uri
+      FROM note_position position
+      WHERE position.space_uri = p.space_uri
+        AND position.author_did = ${authorityDid}
+        AND position.subject_uri = p.uri
+        AND position.subject_cid = p.cid
+      ORDER BY position.created_at DESC, position.uri DESC
+      LIMIT 1
     )
-    .all(authorityDid, authorityDid, spaceUri) as Array<
-      Omit<BoardPost, "hidden" | "color" | "rotation"> & {
-        x: number | null;
-        y: number | null;
-        color: NoteColor | null;
-        rotation: number | null;
-        hidden: number;
-      }
-    >;
+    WHERE p.space_uri = ${spaceUri}
+    ORDER BY p.created_at DESC
+  `.execute(getQueryDb());
 
-  return rows.map((row) => {
+  return result.rows.map((row) => {
     const fallback = fallbackPosition(row.uri);
     const style = fallbackNoteStyle(row.uri);
     return {
@@ -652,100 +549,215 @@ export function listBoardPosts(
   });
 }
 
-export function getSpaceBlob(
+export async function getSpaceBlob(
   spaceUri: string,
   repoDid: string,
   cid: string,
-): SpaceBlob | null {
-  const row = getDb()
-    .prepare(
-      `SELECT space_uri AS spaceUri, repo_did AS repoDid, cid,
-              mime_type AS mimeType, size
-       FROM space_blob
-       WHERE space_uri = ? AND repo_did = ? AND cid = ?`,
-    )
-    .get(spaceUri, repoDid, cid) as SpaceBlob | undefined;
+): Promise<SpaceBlob | null> {
+  const row = await getQueryDb()
+    .selectFrom("spaceBlob")
+    .select(["spaceUri", "repoDid", "cid", "mimeType", "size"])
+    .where("spaceUri", "=", spaceUri)
+    .where("repoDid", "=", repoDid)
+    .where("cid", "=", cid)
+    .executeTakeFirst();
   return row ?? null;
 }
 
-export function getReferencedSpaceBlob(
+export async function getReferencedSpaceBlob(
   spaceUri: string,
   repoDid: string,
   cid: string,
-): SpaceBlob | null {
-  const blob = getSpaceBlob(spaceUri, repoDid, cid);
+): Promise<SpaceBlob | null> {
+  const blob = await getSpaceBlob(spaceUri, repoDid, cid);
   if (!blob) return null;
-  const referenced = getDb()
-    .prepare(
-      `SELECT 1 FROM post
-       WHERE space_uri = ? AND author_did = ? AND image_cid = ?
-       LIMIT 1`,
-    )
-    .get(spaceUri, repoDid, cid);
+  const referenced = await getQueryDb()
+    .selectFrom("post")
+    .select("uri")
+    .where("spaceUri", "=", spaceUri)
+    .where("authorDid", "=", repoDid)
+    .where("imageCid", "=", cid)
+    .executeTakeFirst();
   return referenced ? blob : null;
 }
 
-function insertSpaceBlob(db: ReturnType<typeof getDb>, blob: SpaceBlob): void {
-  db.prepare(
-    `INSERT INTO space_blob(
-       space_uri, repo_did, cid, mime_type, size, updated_at
-     ) VALUES (
-       @spaceUri, @repoDid, @cid, @mimeType, @size, @updatedAt
-     )
-     ON CONFLICT(space_uri, repo_did, cid) DO UPDATE SET
-       mime_type = excluded.mime_type,
-       size = excluded.size,
-       updated_at = excluded.updated_at`,
-  ).run({
-    ...blob,
-    updatedAt: new Date().toISOString(),
-  });
+async function upsertPostWith(
+  db: DatabaseConnection,
+  input: PostInput,
+): Promise<void> {
+  await db
+    .insertInto("post")
+    .values(postValues(input))
+    .onConflict((conflict) =>
+      conflict.column("uri").doUpdateSet((eb) => ({
+        cid: eb.ref("excluded.cid"),
+        text: eb.ref("excluded.text"),
+        imageCid: eb.ref("excluded.imageCid"),
+        imageMime: eb.ref("excluded.imageMime"),
+        imageSize: eb.ref("excluded.imageSize"),
+        imageAlt: eb.ref("excluded.imageAlt"),
+        color: eb.ref("excluded.color"),
+        rotation: eb.ref("excluded.rotation"),
+        x: eb.ref("excluded.x"),
+        y: eb.ref("excluded.y"),
+        createdAt: eb.ref("excluded.createdAt"),
+        indexedAt: eb.ref("excluded.indexedAt"),
+      })),
+    )
+    .execute();
 }
 
-function pruneSpaceBlobs(
-  db: ReturnType<typeof getDb>,
+async function upsertPositionWith(
+  db: DatabaseConnection,
+  input: PositionInput,
+): Promise<void> {
+  await db
+    .insertInto("notePosition")
+    .values({ ...input, indexedAt: new Date().toISOString() })
+    .onConflict((conflict) =>
+      conflict.column("uri").doUpdateSet((eb) => ({
+        cid: eb.ref("excluded.cid"),
+        subjectCid: eb.ref("excluded.subjectCid"),
+        x: eb.ref("excluded.x"),
+        y: eb.ref("excluded.y"),
+        createdAt: eb.ref("excluded.createdAt"),
+        indexedAt: eb.ref("excluded.indexedAt"),
+      })),
+    )
+    .execute();
+}
+
+async function upsertLabelWith(
+  db: DatabaseConnection,
+  input: LabelInput,
+): Promise<void> {
+  await db
+    .insertInto("moderationLabel")
+    .values(labelValues(input))
+    .onConflict((conflict) =>
+      conflict.column("uri").doUpdateSet((eb) => ({
+        cid: eb.ref("excluded.cid"),
+        neg: eb.ref("excluded.neg"),
+        indexedAt: eb.ref("excluded.indexedAt"),
+      })),
+    )
+    .execute();
+}
+
+async function deleteSyncedRecord(
+  db: DatabaseConnection,
+  table: SyncedDeleteTable,
+  uri: string,
+): Promise<void> {
+  if (table === "post") {
+    await db.deleteFrom("post").where("uri", "=", uri).execute();
+  } else if (table === "moderation_label") {
+    await db.deleteFrom("moderationLabel").where("uri", "=", uri).execute();
+  } else {
+    await db.deleteFrom("notePosition").where("uri", "=", uri).execute();
+  }
+}
+
+async function insertSpaceBlob(
+  db: DatabaseConnection,
+  blob: SpaceBlob,
+  updatedAt = new Date().toISOString(),
+): Promise<void> {
+  await db
+    .insertInto("spaceBlob")
+    .values({ ...blob, updatedAt })
+    .onConflict((conflict) =>
+      conflict.columns(["spaceUri", "repoDid", "cid"]).doUpdateSet((eb) => ({
+        mimeType: eb.ref("excluded.mimeType"),
+        size: eb.ref("excluded.size"),
+        updatedAt: eb.ref("excluded.updatedAt"),
+      })),
+    )
+    .execute();
+}
+
+async function pruneSpaceBlobs(
+  db: DatabaseConnection,
   spaceUri: string,
   repoDid: string,
-): string[] {
-  const cids = db
-    .prepare(
-      `SELECT cid FROM space_blob
-       WHERE space_uri = ? AND repo_did = ?
-         AND NOT EXISTS (
-           SELECT 1 FROM post
-           WHERE post.space_uri = space_blob.space_uri
-             AND post.author_did = space_blob.repo_did
-             AND post.image_cid = space_blob.cid
-         )`,
-    )
-    .all(spaceUri, repoDid)
-    .map((row) => (row as { cid: string }).cid);
-  db.prepare(
-    `DELETE FROM space_blob
-     WHERE space_uri = ? AND repo_did = ?
-       AND NOT EXISTS (
-         SELECT 1 FROM post
-         WHERE post.space_uri = space_blob.space_uri
-           AND post.author_did = space_blob.repo_did
-           AND post.image_cid = space_blob.cid
-       )`,
-  ).run(spaceUri, repoDid);
-  return cids;
+): Promise<string[]> {
+  const unreferenced = sql<boolean>`NOT EXISTS (
+    SELECT 1 FROM post
+    WHERE post.space_uri = space_blob.space_uri
+      AND post.author_did = space_blob.repo_did
+      AND post.image_cid = space_blob.cid
+  )`;
+  const blobs = await db
+    .selectFrom("spaceBlob")
+    .select("cid")
+    .where("spaceUri", "=", spaceUri)
+    .where("repoDid", "=", repoDid)
+    .where(unreferenced)
+    .execute();
+  await db
+    .deleteFrom("spaceBlob")
+    .where("spaceUri", "=", spaceUri)
+    .where("repoDid", "=", repoDid)
+    .where(unreferenced)
+    .execute();
+  return blobs.map(({ cid }) => cid);
 }
 
-function deleteUnreferencedBlobFiles(
-  db: ReturnType<typeof getDb>,
+async function deleteUnreferencedBlobFiles(
+  db: DatabaseConnection,
   cids: string[],
-): void {
-  const hasReference = db.prepare("SELECT 1 FROM space_blob WHERE cid = ? LIMIT 1");
-  for (const cid of new Set(cids)) {
-    if (hasReference.get(cid)) continue;
+): Promise<void> {
+  const uniqueCids = [...new Set(cids)];
+  if (uniqueCids.length === 0) return;
+  const referenced = await db
+    .selectFrom("spaceBlob")
+    .select("cid")
+    .where("cid", "in", uniqueCids)
+    .execute();
+  const referencedCids = new Set(referenced.map(({ cid }) => cid));
+  for (const cid of uniqueCids) {
+    if (referencedCids.has(cid)) continue;
     try {
       deleteBlobFile(cid);
     } catch (error) {
       console.error(`Could not delete dereferenced image ${cid}`, error);
     }
   }
+}
+
+function postValues(input: PostInput, indexedAt = new Date().toISOString()) {
+  return {
+    uri: input.uri,
+    cid: input.cid,
+    spaceUri: input.spaceUri,
+    authorDid: input.authorDid,
+    text: input.text,
+    imageCid: input.image?.cid ?? null,
+    imageMime: input.image?.mimeType ?? null,
+    imageSize: input.image?.size ?? null,
+    imageAlt: input.image?.alt ?? null,
+    color: input.color ?? null,
+    rotation: input.rotation ?? null,
+    x: input.x ?? null,
+    y: input.y ?? null,
+    createdAt: input.createdAt,
+    indexedAt,
+  };
+}
+
+function labelValues(input: LabelInput, indexedAt = new Date().toISOString()) {
+  return {
+    uri: input.uri,
+    cid: input.cid,
+    spaceUri: input.spaceUri,
+    authorDid: input.authorDid,
+    subjectUri: input.subjectUri,
+    subjectCid: input.subjectCid ?? null,
+    val: input.val,
+    neg: input.neg ? 1 : 0,
+    createdAt: input.createdAt,
+    indexedAt,
+  };
 }
 
 function fallbackPosition(uri: string): { x: number; y: number } {

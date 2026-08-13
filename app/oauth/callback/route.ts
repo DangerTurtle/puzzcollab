@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     );
     await cacheIdentity(session.did);
     const previousToken = request.cookies.get(WEB_SESSION_COOKIE_NAME)?.value;
-    if (previousToken) deleteWebSession(previousToken);
-    const token = createWebSession(session.did);
+    if (previousToken) await deleteWebSession(previousToken);
+    const token = await createWebSession(session.did);
     const response = NextResponse.redirect(APP_UI_URL);
     response.cookies.set(
       WEB_SESSION_COOKIE_NAME,

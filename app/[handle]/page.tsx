@@ -27,7 +27,7 @@ export default async function BoardPage({
   await cacheIdentity(ownerDid).catch(() => undefined);
   const ownBoard = session?.did === ownerDid;
   const space = boardUri(ownerDid);
-  const owner = getAccount(ownerDid);
+  const owner = await getAccount(ownerDid);
 
   if (!session) {
     return (
@@ -42,7 +42,7 @@ export default async function BoardPage({
     );
   }
 
-  if (ownBoard && !hasBoard(ownerDid)) {
+  if (ownBoard && !(await hasBoard(ownerDid))) {
     return (
       <main className="shell">
         <Header did={session.did} />
@@ -55,7 +55,7 @@ export default async function BoardPage({
     );
   }
 
-  if (!ownBoard && !hasBoard(ownerDid)) {
+  if (!ownBoard && !(await hasBoard(ownerDid))) {
     return (
       <main className="shell">
         <Header did={session.did} />
@@ -105,7 +105,7 @@ export default async function BoardPage({
     console.error("Could not refresh board", error);
   }
 
-  const posts = listBoardPosts(space, ownerDid);
+  const posts = await listBoardPosts(space, ownerDid);
   const visiblePosts = posts.filter((post) => !post.hidden);
   const displayedPosts = posts.filter(
     (post) => !post.hidden || post.authorDid === session.did,

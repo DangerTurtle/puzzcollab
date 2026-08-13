@@ -5,7 +5,6 @@ import {
   SYNC_SERVICE_DID,
   SYNC_URL,
 } from "../lib/config";
-import { migrate } from "../lib/db/migrations";
 import { SyncEngine } from "../lib/sync/engine";
 import {
   verifySpaceDeletionNotification,
@@ -14,8 +13,6 @@ import {
 
 const clients = new Map<string, Set<ServerResponse>>();
 const engine = new SyncEngine((space) => broadcast(space));
-
-migrate();
 
 const server = createServer(async (request, response) => {
   try {
@@ -98,7 +95,7 @@ const server = createServer(async (request, response) => {
         ? request.headers.authorization[0]
         : request.headers.authorization;
       await verifySpaceDeletionNotification(authorization, body.space);
-      engine.deleteSpace(body.space);
+      await engine.deleteSpace(body.space);
       return json(response, 200, {});
     }
     return json(response, 404, { error: "Not found" });

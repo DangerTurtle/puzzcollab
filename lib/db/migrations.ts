@@ -1,280 +1,241 @@
-import type Database from "better-sqlite3";
-import { getDb } from "./index";
+import { sql, type Kysely } from "kysely";
+import {
+  Migrator,
+  type Migration,
+  type MigrationProvider,
+} from "kysely/migration";
+import { getQueryDb } from "./index";
+import type { DatabaseSchema } from "./schema";
 
-type Migration = {
-  version: number;
-  up: (db: Database.Database) => void;
+export const INITIAL_MIGRATION_NAME = "001_initial";
+
+const LEGACY_MIGRATION_COUNT = 11;
+const APPLICATION_TABLES = [
+  "account",
+  "auth_session",
+  "auth_state",
+  "board",
+  "moderation_label",
+  "note_position",
+  "post",
+  "space_blob",
+  "sync_repo",
+  "sync_space",
+  "web_session",
+] as const;
+
+const initialMigration: Migration = {
+  async up(db) {
+    const tables = new Set(
+      (await db.introspection.getTables()).map(({ name }) => name),
+    );
+
+    if (tables.has("migration")) {
+      await adoptLegacySchema(db);
+      return;
+    }
+
+    const existingTables = APPLICATION_TABLES.filter((table) =>
+      tables.has(table),
+    );
+    if (existingTables.length > 0) {
+      throw new Error(
+        `Cannot initialize over an unversioned schema: ${existingTables.join(", ")}`,
+      );
+    }
+
+    await createInitialSchema(db);
+  },
+
+  async down(db) {
+    for (const table of [...APPLICATION_TABLES].reverse()) {
+      await db.schema.dropTable(table).ifExists().execute();
+    }
+  },
 };
 
-const migrations: Migration[] = [
-  {
-    version: 1,
-    up(db) {
-      db.exec(`
-        CREATE TABLE auth_state (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
-
-        CREATE TABLE auth_session (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
-
-        CREATE TABLE account (
-          did TEXT PRIMARY KEY,
-          handle TEXT,
-          pds_url TEXT,
-          updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE board (
-          space_uri TEXT PRIMARY KEY,
-          owner_did TEXT NOT NULL UNIQUE,
-          created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE post (
-          uri TEXT PRIMARY KEY,
-          cid TEXT NOT NULL,
-          space_uri TEXT NOT NULL,
-          author_did TEXT NOT NULL,
-          text TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          indexed_at TEXT NOT NULL
-        );
-
-        CREATE INDEX post_board_created_idx
-          ON post(space_uri, created_at DESC);
-
-        CREATE TABLE moderation_label (
-          uri TEXT PRIMARY KEY,
-          cid TEXT NOT NULL,
-          space_uri TEXT NOT NULL,
-          author_did TEXT NOT NULL,
-          subject_uri TEXT NOT NULL,
-          subject_cid TEXT,
-          val TEXT NOT NULL,
-          neg INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL,
-          indexed_at TEXT NOT NULL
-        );
-
-        CREATE INDEX label_subject_created_idx
-          ON moderation_label(space_uri, subject_uri, created_at DESC);
-      `);
-    },
+const migrationProvider: MigrationProvider = {
+  async getMigrations() {
+    return { [INITIAL_MIGRATION_NAME]: initialMigration };
   },
-  {
-    version: 2,
-    up(db) {
-      db.exec(`
-        ALTER TABLE post ADD COLUMN x INTEGER;
-        ALTER TABLE post ADD COLUMN y INTEGER;
+};
 
-        CREATE TABLE note_position (
-          uri TEXT PRIMARY KEY,
-          cid TEXT NOT NULL,
-          space_uri TEXT NOT NULL,
-          author_did TEXT NOT NULL,
-          subject_uri TEXT NOT NULL,
-          subject_cid TEXT NOT NULL,
-          x INTEGER NOT NULL,
-          y INTEGER NOT NULL,
-          created_at TEXT NOT NULL,
-          indexed_at TEXT NOT NULL
-        );
+export async function migrate(): Promise<void> {
+  await migrateDatabase(getQueryDb());
+}
 
-        CREATE INDEX note_position_subject_created_idx
-          ON note_position(space_uri, subject_uri, subject_cid, created_at DESC);
-      `);
-    },
-  },
-  {
-    version: 3,
-    up(db) {
-      db.exec(`
-        CREATE TABLE sync_space (
-          space_uri TEXT PRIMARY KEY,
-          viewer_did TEXT NOT NULL,
-          authority_did TEXT NOT NULL,
-          registration_expires_at TEXT,
-          last_error TEXT,
-          updated_at TEXT NOT NULL
-        );
+export async function migrateDatabase(
+  db: Kysely<DatabaseSchema>,
+): Promise<void> {
+  const migrator = new Migrator({ db, provider: migrationProvider });
+  const { error } = await migrator.migrateToLatest();
+  if (error) throw new Error("Database migration failed", { cause: error });
+}
 
-        CREATE TABLE sync_repo (
-          space_uri TEXT NOT NULL,
-          repo_did TEXT NOT NULL,
-          pds_url TEXT NOT NULL,
-          rev TEXT NOT NULL,
-          lthash BLOB NOT NULL,
-          commit_hash BLOB NOT NULL,
-          updated_at TEXT NOT NULL,
-          PRIMARY KEY(space_uri, repo_did)
-        );
-      `);
-    },
-  },
-  {
-    version: 4,
-    up(db) {
-      db.exec(`
-        ALTER TABLE post ADD COLUMN color TEXT;
-        ALTER TABLE post ADD COLUMN rotation INTEGER;
-      `);
-    },
-  },
-  {
-    version: 5,
-    up(db) {
-      db.exec(`
-        DELETE FROM post
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-        DELETE FROM moderation_label
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-        DELETE FROM note_position
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-        DELETE FROM sync_repo
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-        DELETE FROM sync_space
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-        DELETE FROM board
-          WHERE space_uri LIKE 'at://%/space/com.example.bulletin/%';
-      `);
-    },
-  },
-  {
-    version: 6,
-    up(db) {
-      db.exec(`
-        DELETE FROM auth_session
-          WHERE json_extract(value, '$.tokenSet.scope')
-            LIKE '%include:com.example.bulletinPermissions%';
-        DELETE FROM auth_state;
-      `);
-    },
-  },
-  {
-    version: 7,
-    up(db) {
-      db.exec(`
-        DELETE FROM auth_session;
-        DELETE FROM auth_state;
-      `);
-    },
-  },
-  {
-    version: 8,
-    up(db) {
-      db.exec(`
-        DELETE FROM post
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM moderation_label
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM note_position
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM sync_repo
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM sync_space
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM board
-          WHERE space_uri LIKE 'at://%/space/at.dholms.bulletin/%';
-        DELETE FROM auth_session
-          WHERE json_extract(value, '$.tokenSet.scope')
-            LIKE '%space:at.dholms.bulletin?%';
-      `);
-    },
-  },
-  {
-    version: 9,
-    up(db) {
-      db.exec(`
-        CREATE TABLE sync_space_v9 (
-          space_uri TEXT PRIMARY KEY,
-          authority_did TEXT NOT NULL,
-          registration_expires_at TEXT,
-          last_error TEXT,
-          updated_at TEXT NOT NULL
-        );
-
-        INSERT INTO sync_space_v9(
-          space_uri, authority_did, registration_expires_at, last_error, updated_at
-        )
-        SELECT
-          space_uri, authority_did, registration_expires_at, last_error, updated_at
-        FROM sync_space;
-
-        DROP TABLE sync_space;
-        ALTER TABLE sync_space_v9 RENAME TO sync_space;
-      `);
-    },
-  },
-  {
-    version: 10,
-    up(db) {
-      db.exec(`
-        ALTER TABLE post ADD COLUMN image_cid TEXT;
-        ALTER TABLE post ADD COLUMN image_mime TEXT;
-        ALTER TABLE post ADD COLUMN image_size INTEGER;
-        ALTER TABLE post ADD COLUMN image_alt TEXT;
-
-        CREATE TABLE space_blob (
-          space_uri TEXT NOT NULL,
-          repo_did TEXT NOT NULL,
-          cid TEXT NOT NULL,
-          mime_type TEXT NOT NULL,
-          size INTEGER NOT NULL,
-          updated_at TEXT NOT NULL,
-          PRIMARY KEY(space_uri, repo_did, cid)
-        );
-
-        DELETE FROM auth_session;
-        DELETE FROM auth_state;
-      `);
-    },
-  },
-  {
-    version: 11,
-    up(db) {
-      db.exec(`
-        CREATE TABLE web_session (
-          token_hash TEXT PRIMARY KEY,
-          did TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          expires_at TEXT NOT NULL
-        );
-
-        CREATE INDEX web_session_did_idx ON web_session(did);
-      `);
-    },
-  },
-];
-
-export function migrate(): void {
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS migration (
-      version INTEGER PRIMARY KEY,
-      applied_at TEXT NOT NULL
+async function adoptLegacySchema(db: Kysely<unknown>): Promise<void> {
+  const result = await sql<{
+    count: number;
+    minVersion: number | null;
+    maxVersion: number | null;
+  }>`
+    SELECT
+      count(*) AS count,
+      min(version) AS minVersion,
+      max(version) AS maxVersion
+    FROM migration
+  `.execute(db);
+  const summary = result.rows[0];
+  if (
+    !summary ||
+    summary.count !== LEGACY_MIGRATION_COUNT ||
+    summary.minVersion !== 1 ||
+    summary.maxVersion !== LEGACY_MIGRATION_COUNT
+  ) {
+    throw new Error(
+      `Legacy database must be migrated through version ${LEGACY_MIGRATION_COUNT} before upgrading`,
     );
-  `);
-
-  const applied = new Set(
-    db
-      .prepare("SELECT version FROM migration")
-      .all()
-      .map((row) => (row as { version: number }).version),
-  );
-
-  const apply = db.transaction((migration: Migration) => {
-    migration.up(db);
-    db.prepare(
-      "INSERT INTO migration(version, applied_at) VALUES (?, ?)",
-    ).run(migration.version, new Date().toISOString());
-  });
-
-  for (const migration of migrations) {
-    if (!applied.has(migration.version)) apply(migration);
   }
+  await db.schema.dropTable("migration").execute();
+}
+
+async function createInitialSchema(db: Kysely<unknown>): Promise<void> {
+  await db.schema
+    .createTable("authState")
+    .addColumn("key", "text", (column) => column.primaryKey())
+    .addColumn("value", "text", (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("authSession")
+    .addColumn("key", "text", (column) => column.primaryKey())
+    .addColumn("value", "text", (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("account")
+    .addColumn("did", "text", (column) => column.primaryKey())
+    .addColumn("handle", "text")
+    .addColumn("pdsUrl", "text")
+    .addColumn("updatedAt", "text", (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("board")
+    .addColumn("spaceUri", "text", (column) => column.primaryKey())
+    .addColumn("ownerDid", "text", (column) => column.notNull().unique())
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("post")
+    .addColumn("uri", "text", (column) => column.primaryKey())
+    .addColumn("cid", "text", (column) => column.notNull())
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("authorDid", "text", (column) => column.notNull())
+    .addColumn("text", "text", (column) => column.notNull())
+    .addColumn("imageCid", "text")
+    .addColumn("imageMime", "text")
+    .addColumn("imageSize", "integer")
+    .addColumn("imageAlt", "text")
+    .addColumn("color", "text")
+    .addColumn("rotation", "integer")
+    .addColumn("x", "integer")
+    .addColumn("y", "integer")
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .addColumn("indexedAt", "text", (column) => column.notNull())
+    .execute();
+  await db.schema
+    .createIndex("postBoardCreatedIdx")
+    .on("post")
+    .columns(["spaceUri", "createdAt desc"])
+    .execute();
+
+  await db.schema
+    .createTable("moderationLabel")
+    .addColumn("uri", "text", (column) => column.primaryKey())
+    .addColumn("cid", "text", (column) => column.notNull())
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("authorDid", "text", (column) => column.notNull())
+    .addColumn("subjectUri", "text", (column) => column.notNull())
+    .addColumn("subjectCid", "text")
+    .addColumn("val", "text", (column) => column.notNull())
+    .addColumn("neg", "integer", (column) =>
+      column.notNull().defaultTo(0),
+    )
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .addColumn("indexedAt", "text", (column) => column.notNull())
+    .execute();
+  await db.schema
+    .createIndex("labelSubjectCreatedIdx")
+    .on("moderationLabel")
+    .columns(["spaceUri", "subjectUri", "createdAt desc"])
+    .execute();
+
+  await db.schema
+    .createTable("notePosition")
+    .addColumn("uri", "text", (column) => column.primaryKey())
+    .addColumn("cid", "text", (column) => column.notNull())
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("authorDid", "text", (column) => column.notNull())
+    .addColumn("subjectUri", "text", (column) => column.notNull())
+    .addColumn("subjectCid", "text", (column) => column.notNull())
+    .addColumn("x", "integer", (column) => column.notNull())
+    .addColumn("y", "integer", (column) => column.notNull())
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .addColumn("indexedAt", "text", (column) => column.notNull())
+    .execute();
+  await db.schema
+    .createIndex("notePositionSubjectCreatedIdx")
+    .on("notePosition")
+    .columns(["spaceUri", "subjectUri", "subjectCid", "createdAt desc"])
+    .execute();
+
+  await db.schema
+    .createTable("syncSpace")
+    .addColumn("spaceUri", "text", (column) => column.primaryKey())
+    .addColumn("authorityDid", "text", (column) => column.notNull())
+    .addColumn("registrationExpiresAt", "text")
+    .addColumn("lastError", "text")
+    .addColumn("updatedAt", "text", (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("syncRepo")
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("repoDid", "text", (column) => column.notNull())
+    .addColumn("pdsUrl", "text", (column) => column.notNull())
+    .addColumn("rev", "text", (column) => column.notNull())
+    .addColumn("lthash", "blob", (column) => column.notNull())
+    .addColumn("commitHash", "blob", (column) => column.notNull())
+    .addColumn("updatedAt", "text", (column) => column.notNull())
+    .addPrimaryKeyConstraint("syncRepoPrimaryKey", ["spaceUri", "repoDid"])
+    .execute();
+
+  await db.schema
+    .createTable("spaceBlob")
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("repoDid", "text", (column) => column.notNull())
+    .addColumn("cid", "text", (column) => column.notNull())
+    .addColumn("mimeType", "text", (column) => column.notNull())
+    .addColumn("size", "integer", (column) => column.notNull())
+    .addColumn("updatedAt", "text", (column) => column.notNull())
+    .addPrimaryKeyConstraint("spaceBlobPrimaryKey", [
+      "spaceUri",
+      "repoDid",
+      "cid",
+    ])
+    .execute();
+
+  await db.schema
+    .createTable("webSession")
+    .addColumn("tokenHash", "text", (column) => column.primaryKey())
+    .addColumn("did", "text", (column) => column.notNull())
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .addColumn("expiresAt", "text", (column) => column.notNull())
+    .execute();
+  await db.schema
+    .createIndex("webSessionDidIdx")
+    .on("webSession")
+    .column("did")
+    .execute();
 }

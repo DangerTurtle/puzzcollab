@@ -12,7 +12,7 @@ export default async function LegacyBoardPage({
   const identifier = decodeURIComponent((await params).did);
   if (identifier.startsWith("did:")) {
     await cacheIdentity(identifier).catch(() => undefined);
-    const handle = getAccount(identifier)?.handle;
+    const handle = (await getAccount(identifier))?.handle;
     if (handle) redirect(`/${encodeURIComponent(handle)}`);
   } else {
     redirect(`/${encodeURIComponent(identifier.replace(/^@/, ""))}`);

@@ -11,7 +11,7 @@ export default async function Home() {
   const session = await getSession();
   if (session) {
     await cacheIdentity(session.did).catch(() => undefined);
-    const handle = getAccount(session.did)?.handle;
+    const handle = (await getAccount(session.did))?.handle;
     if (handle) redirect(`/${encodeURIComponent(handle)}`);
   }
 

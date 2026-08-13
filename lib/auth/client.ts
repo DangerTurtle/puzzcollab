@@ -4,10 +4,11 @@ import {
   type NodeSavedSession,
   type NodeSavedState,
 } from "@atproto/oauth-client-node";
+import { sql } from "kysely";
 import { isIP } from "node:net";
 import { APP_UI_URL, PLC_URL } from "../config";
 import { resolveHandle } from "../atproto/identity";
-import { getDb } from "../db";
+import { getQueryDb } from "../db";
 import { getClientMetadata } from "./metadata";
 
 let oauthClient: NodeOAuthClient | undefined;
@@ -24,8 +25,8 @@ export async function getOAuthClient(): Promise<NodeOAuthClient> {
         return (await resolveHandle(handle)) as AtprotoDid | null;
       },
     },
-    stateStore: sqliteStore<NodeSavedState>("auth_state"),
-    sessionStore: sqliteStore<NodeSavedSession>("auth_session"),
+    stateStore: sqliteStore<NodeSavedState>("authState"),
+    sessionStore: sqliteStore<NodeSavedSession>("authSession"),
   });
 
   return oauthClient;
@@ -41,31 +42,35 @@ function isLoopbackApp(): boolean {
   );
 }
 
-export function listStoredSessionDids(): string[] {
-  return getDb()
-    .prepare("SELECT key FROM auth_session ORDER BY rowid")
-    .all()
-    .map((row) => (row as { key: string }).key);
+export async function listStoredSessionDids(): Promise<string[]> {
+  const rows = await getQueryDb()
+    .selectFrom("authSession")
+    .select("key")
+    .orderBy(sql`rowid`)
+    .execute();
+  return rows.map(({ key }) => key);
 }
 
-function sqliteStore<T>(table: "auth_state" | "auth_session") {
+function sqliteStore<T>(table: "authState" | "authSession") {
   return {
     async get(key: string): Promise<T | undefined> {
-      const row = getDb()
-        .prepare(`SELECT value FROM ${table} WHERE key = ?`)
-        .get(key) as { value: string } | undefined;
+      const result = await sql<{ value: string }>`
+        SELECT value FROM ${sql.table(table)} WHERE key = ${key}
+      `.execute(getQueryDb());
+      const row = result.rows[0];
       return row ? (JSON.parse(row.value) as T) : undefined;
     },
     async set(key: string, value: T): Promise<void> {
-      getDb()
-        .prepare(
-          `INSERT INTO ${table}(key, value) VALUES (?, ?)
-           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-        )
-        .run(key, JSON.stringify(value));
+      await sql`
+        INSERT INTO ${sql.table(table)} (key, value)
+        VALUES (${key}, ${JSON.stringify(value)})
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value
+      `.execute(getQueryDb());
     },
     async del(key: string): Promise<void> {
-      getDb().prepare(`DELETE FROM ${table} WHERE key = ?`).run(key);
+      await sql`
+        DELETE FROM ${sql.table(table)} WHERE key = ${key}
+      `.execute(getQueryDb());
     },
   };
 }
