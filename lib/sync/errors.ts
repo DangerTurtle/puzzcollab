@@ -1,4 +1,4 @@
-import { XRPCError } from "@atproto/api";
+import { LexError } from "@atproto/lex-data";
 
 export class WatchInvalidatedError extends Error {
   constructor() {
@@ -8,11 +8,11 @@ export class WatchInvalidatedError extends Error {
 }
 
 export function isSpaceDeletedError(error: unknown): boolean {
-  return error instanceof XRPCError && error.error === "SpaceDeleted";
+  return error instanceof LexError && error.error === "SpaceDeleted";
 }
 
 export function isSpaceNotFoundError(error: unknown): boolean {
-  return error instanceof XRPCError && error.error === "SpaceNotFound";
+  return error instanceof LexError && error.error === "SpaceNotFound";
 }
 
 export function isBoardAbsentError(error: unknown): boolean {

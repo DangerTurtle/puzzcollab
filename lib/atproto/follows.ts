@@ -1,5 +1,6 @@
-import { AppBskyGraphDefs } from "@atproto/api";
-import { getBskyAgent } from "./bsky";
+import { asAtIdentifierString } from "@atproto/lex-schema";
+import { app } from "../lexicons";
+import { getBskyClient } from "./bsky";
 
 export type Relationship = {
   follows: boolean;
@@ -12,12 +13,16 @@ export async function getRelationship(
 ): Promise<Relationship> {
   if (actorDid === otherDid) return { follows: true, followedBy: true };
 
-  const response = await getBskyAgent().app.bsky.graph.getRelationships(
-    { actor: actorDid, others: [otherDid] },
+  const response = await getBskyClient().call(
+    app.bsky.graph.getRelationships,
+    {
+      actor: asAtIdentifierString(actorDid),
+      others: [asAtIdentifierString(otherDid)],
+    },
     { signal: AbortSignal.timeout(2500) },
   );
-  const relationship = response.data.relationships.find(
-    AppBskyGraphDefs.isRelationship,
+  const relationship = response.relationships.find((value) =>
+    app.bsky.graph.defs.relationship.isTypeOf(value),
   );
 
   return {
@@ -38,13 +43,17 @@ export async function getFollowersAmong(
 
   for (let offset = 0; offset < uniqueOthers.length; offset += 30) {
     const others = uniqueOthers.slice(offset, offset + 30);
-    const response = await getBskyAgent().app.bsky.graph.getRelationships(
-      { actor: actorDid, others },
+    const response = await getBskyClient().call(
+      app.bsky.graph.getRelationships,
+      {
+        actor: asAtIdentifierString(actorDid),
+        others: others.map(asAtIdentifierString),
+      },
       { signal: AbortSignal.timeout(2500) },
     );
-    for (const relationship of response.data.relationships) {
+    for (const relationship of response.relationships) {
       if (
-        AppBskyGraphDefs.isRelationship(relationship) &&
+        app.bsky.graph.defs.relationship.isTypeOf(relationship) &&
         relationship.followedBy
       ) {
         followers.add(relationship.did);

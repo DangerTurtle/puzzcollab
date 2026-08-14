@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BlobRef } from "@atproto/api";
 import { cidForRawBytes } from "@atproto/lex-data";
 import { MAX_NOTE_IMAGE_BYTES } from "../note-constraints";
 import { parseNoteImage } from "../note-image";
@@ -17,14 +16,6 @@ test("accepts one supported, size-bounded image blob", async () => {
     alt: "A tiny image",
   });
   assert.equal(parseNoteImage(ref, null)?.alt, null);
-  const blobRefInstance = BlobRef.asBlobRef(ref);
-  assert.ok(blobRefInstance);
-  assert.deepEqual(parseNoteImage(blobRefInstance, null), {
-    cid: ref.ref.toString(),
-    mimeType: "image/webp",
-    size: bytes.length,
-    alt: null,
-  });
 });
 
 test("rejects unsupported and oversized image references", async () => {

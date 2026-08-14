@@ -1,7 +1,10 @@
-import { Agent, XRPCError } from "@atproto/api";
+import { Client, XrpcResponseError } from "@atproto/lex-client";
+import { LexError } from "@atproto/lex-data";
+import { asStringFormat } from "@atproto/lex-schema";
 import { JoseKey } from "@atproto/jwk-jose";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import { createDpopProof } from "@atproto/space";
+import { com } from "../lexicons";
 import { resolvePds } from "./identity";
 
 const GET_SPACE_CREDENTIAL_PATH =
@@ -31,8 +34,8 @@ export class SpaceCredential {
     return this.fetchImpl(request);
   };
 
-  agent(service: string): Agent {
-    return new Agent({ service, fetch: this.fetch });
+  client(service: string): Client {
+    return new Client({ service, fetch: this.fetch });
   }
 }
 
@@ -40,17 +43,18 @@ export async function mintSpaceCredential(
   session: OAuthSession,
   space: string,
 ): Promise<SpaceCredential> {
-  const viewerAgent = new Agent(session);
-  const delegation = await viewerAgent.com.atproto.space.getDelegationToken({
-    space,
-  });
+  const viewerClient = new Client(session);
+  const delegation = await viewerClient.call(
+    com.atproto.space.getDelegationToken,
+    { space: asStringFormat(space, "space-ref") },
+  );
   const authority = space.match(/^at:\/\/(did:[^/]+)\/space\//)?.[1];
   if (!authority) throw new Error("Invalid space URI");
   const authorityPds = await resolvePds(authority);
   const key = await JoseKey.generate(["ES256"]);
   const credential = await exchangeSpaceCredential({
     authorityPds,
-    delegationToken: delegation.data.token,
+    delegationToken: delegation.token,
     space,
     key,
   });
@@ -87,18 +91,27 @@ export async function exchangeSpaceCredential(input: {
   const body = await readJson(response);
   if (!response.ok) {
     const error = asObject(body);
-    throw new XRPCError(
-      response.status,
-      typeof error?.error === "string" ? error.error : undefined,
-      typeof error?.message === "string" ? error.message : undefined,
-      Object.fromEntries(response.headers.entries()),
+    const errorCode =
+      typeof error?.error === "string"
+        ? error.error
+        : response.status >= 500
+          ? "UpstreamFailure"
+          : "InvalidRequest";
+    const message =
+      typeof error?.message === "string" ? error.message : undefined;
+    throw new XrpcResponseError(
+      com.atproto.space.getSpaceCredential.main,
+      response,
+      {
+        encoding: "application/json",
+        body: { error: errorCode, ...(message ? { message } : {}) },
+      },
     );
   }
 
   const output = asObject(body);
   if (typeof output?.credential !== "string" || !output.credential) {
-    throw new XRPCError(
-      500,
+    throw new LexError(
       "InvalidResponse",
       "Credential exchange returned no credential",
     );

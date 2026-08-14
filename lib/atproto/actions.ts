@@ -1,4 +1,5 @@
-import { Agent } from "@atproto/api";
+import { Client } from "@atproto/lex-client";
+import { asStringFormat, currentDatetimeString } from "@atproto/lex-schema";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
   LABEL_COLLECTION,
@@ -26,10 +27,11 @@ import {
   MAX_NOTE_IMAGE_BYTES,
 } from "../note-constraints";
 import { storeBlobFile } from "../blob-store";
+import { app, com } from "../lexicons";
 
 export async function createBoard(session: OAuthSession): Promise<string> {
-  const agent = new Agent(session);
-  const result = await agent.com.atproto.simplespace.createSpace({
+  const client = new Client(session);
+  const result = await client.call(com.atproto.simplespace.createSpace, {
     type: SPACE_TYPE,
     skey: "self",
     policy: {
@@ -40,8 +42,8 @@ export async function createBoard(session: OAuthSession): Promise<string> {
       $type: "com.atproto.simplespace.defs#open",
     },
   });
-  await saveBoard(result.data.uri, session.did);
-  return result.data.uri;
+  await saveBoard(result.uri, session.did);
+  return result.uri;
 }
 
 export async function followOwner(
@@ -49,10 +51,14 @@ export async function followOwner(
   ownerDid: string,
 ): Promise<void> {
   if (await userFollows(session.did, ownerDid)) return;
-  const agent = new Agent(session);
-  await agent.app.bsky.graph.follow.create(
+  const client = new Client(session);
+  await client.create(
+    app.bsky.graph.follow,
+    {
+      subject: asStringFormat(ownerDid, "did"),
+      createdAt: currentDatetimeString(),
+    },
     { repo: session.did },
-    { subject: ownerDid, createdAt: new Date().toISOString() },
   );
 }
 
@@ -69,10 +75,10 @@ export async function createPost(
 ): Promise<string> {
   if (!(await hasBoard(ownerDid))) throw new Error("Board does not exist");
   await assertCanWrite(session.did, ownerDid);
-  const space = boardUri(ownerDid);
+  const space = asStringFormat(boardUri(ownerDid), "space-ref");
   const createdAt = new Date().toISOString();
   const position = { x: style.x, y: style.y };
-  const agent = new Agent(session);
+  const client = new Client(session);
   let image: NoteImage | undefined;
   if (imageInput) {
     if (
@@ -82,11 +88,13 @@ export async function createPost(
     ) {
       throw new Error("Invalid note image");
     }
-    const uploaded = await agent.com.atproto.repo.uploadBlob(imageInput.bytes, {
-      encoding: imageInput.mimeType,
-    });
+    const uploaded = await client.call(
+      com.atproto.repo.uploadBlob,
+      imageInput.bytes,
+      { encoding: imageInput.mimeType },
+    );
     image =
-      parseNoteImage(uploaded.data.blob.ipld(), imageInput.alt) ?? undefined;
+      parseNoteImage(uploaded.blob, imageInput.alt) ?? undefined;
     if (
       !image ||
       image.mimeType !== imageInput.mimeType ||
@@ -95,7 +103,7 @@ export async function createPost(
       throw new Error("PDS returned an invalid image reference");
     }
   }
-  const result = await agent.com.atproto.space.createRecord({
+  const result = await client.call(com.atproto.space.createRecord, {
     space,
     repo: session.did,
     collection: POST_COLLECTION,
@@ -125,8 +133,8 @@ export async function createPost(
       {
         kind: "post",
         value: {
-          uri: result.data.uri,
-          cid: result.data.cid,
+          uri: result.uri,
+          cid: result.cid,
           spaceUri: space,
           authorDid: session.did,
           text,
@@ -147,7 +155,7 @@ export async function createPost(
       console.error("Could not cache the new note image", error);
     }
   }
-  return result.data.uri;
+  return result.uri;
 }
 
 export async function movePost(
@@ -161,7 +169,7 @@ export async function movePost(
   },
 ): Promise<string> {
   const post = await getPost(input.postUri);
-  const space = boardUri(input.ownerDid);
+  const space = asStringFormat(boardUri(input.ownerDid), "space-ref");
   if (!post || post.spaceUri !== space || post.cid !== input.postCid) {
     throw new Error("That note has changed");
   }
@@ -170,11 +178,11 @@ export async function movePost(
   }
   await assertCanWrite(session.did, input.ownerDid);
 
-  const agent = new Agent(session);
+  const client = new Client(session);
   if (session.did === post.authorDid) {
     const image = storedPostImage(post);
     const rkey = postRkey(post.uri, space, post.authorDid);
-    const result = await agent.com.atproto.space.putRecord({
+    const result = await client.call(com.atproto.space.putRecord, {
       space,
       repo: session.did,
       collection: POST_COLLECTION,
@@ -193,18 +201,18 @@ export async function movePost(
     });
     await upsertPost({
       ...post,
-      cid: result.data.cid,
+      cid: result.cid,
       color: post.color ?? undefined,
       rotation: post.rotation ?? undefined,
       image,
       x: input.x,
       y: input.y,
     });
-    return result.data.cid;
+    return result.cid;
   }
 
   const createdAt = new Date().toISOString();
-  const result = await agent.com.atproto.space.createRecord({
+  const result = await client.call(com.atproto.space.createRecord, {
     space,
     repo: session.did,
     collection: POSITION_COLLECTION,
@@ -217,8 +225,8 @@ export async function movePost(
     },
   });
   await upsertPosition({
-    uri: result.data.uri,
-    cid: result.data.cid,
+    uri: result.uri,
+    cid: result.cid,
     spaceUri: space,
     authorDid: session.did,
     subjectUri: post.uri,
@@ -235,7 +243,7 @@ export async function deleteOwnPost(
   input: { ownerDid: string; postUri: string; postCid: string },
 ): Promise<void> {
   const post = await getPost(input.postUri);
-  const space = boardUri(input.ownerDid);
+  const space = asStringFormat(boardUri(input.ownerDid), "space-ref");
   if (!post || post.spaceUri !== space || post.cid !== input.postCid) {
     throw new Error("That note has changed");
   }
@@ -243,8 +251,8 @@ export async function deleteOwnPost(
     throw new Error("You can only delete your own notes");
   }
 
-  const agent = new Agent(session);
-  await agent.com.atproto.space.deleteRecord({
+  const client = new Client(session);
+  await client.call(com.atproto.space.deleteRecord, {
     space,
     repo: session.did,
     collection: POST_COLLECTION,
@@ -265,10 +273,10 @@ export async function labelPost(
   if (session.did !== input.ownerDid) {
     throw new Error("Only the board owner can moderate this board");
   }
-  const space = boardUri(input.ownerDid);
+  const space = asStringFormat(boardUri(input.ownerDid), "space-ref");
   const createdAt = new Date().toISOString();
-  const agent = new Agent(session);
-  const result = await agent.com.atproto.space.createRecord({
+  const client = new Client(session);
+  const result = await client.call(com.atproto.space.createRecord, {
     space,
     repo: session.did,
     collection: LABEL_COLLECTION,
@@ -282,8 +290,8 @@ export async function labelPost(
     },
   });
   await upsertLabel({
-    uri: result.data.uri,
-    cid: result.data.cid,
+    uri: result.uri,
+    cid: result.cid,
     spaceUri: space,
     authorDid: session.did,
     subjectUri: input.postUri,
@@ -292,7 +300,7 @@ export async function labelPost(
     neg: !input.hidden,
     createdAt,
   });
-  return result.data.uri;
+  return result.uri;
 }
 
 async function assertCanWrite(userDid: string, ownerDid: string): Promise<void> {

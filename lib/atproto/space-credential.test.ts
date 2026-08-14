@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { XRPCError } from "@atproto/api";
+import { XrpcResponseError } from "@atproto/lex-client";
 import { JoseKey } from "@atproto/jwk-jose";
 import { dpopJktForKey, verifyDpopProof } from "@atproto/space";
 import {
@@ -64,11 +64,13 @@ test("credential exchange preserves structured XRPC errors", async () => {
       fetchImpl: async () =>
         Response.json(
           { error: "SpaceDeleted", message: "Space has been deleted" },
-          { status: 400 },
+          { status: 400, headers: { "x-test-header": "preserved" } },
         ),
     }),
     (error) =>
-      error instanceof XRPCError &&
+      error instanceof XrpcResponseError &&
+      error.status === 400 &&
+      error.response.headers.get("x-test-header") === "preserved" &&
       error.error === "SpaceDeleted" &&
       error.message === "Space has been deleted",
   );

@@ -8,17 +8,17 @@ RUN apt-get update \
 WORKDIR /workspace
 
 # @atproto/space is not published yet, so build against the tested source commit.
-ARG ATPROTO_COMMIT=14e3ed0ec5219c58e33eb66a3efe049a3bf2b78f
+ARG ATPROTO_COMMIT=bddc99fb24c34b4078b9bf65837283f37b49ab66
 RUN git clone --filter=blob:none https://github.com/bluesky-social/atproto.git atproto \
   && git -C atproto checkout "$ATPROTO_COMMIT" \
   && corepack prepare pnpm@11.11.0 --activate \
   && pnpm --dir atproto install --frozen-lockfile \
   && pnpm --dir atproto \
-    --filter '@atproto/api...' \
     --filter '@atproto/common-web...' \
     --filter '@atproto/identity...' \
     --filter '@atproto/jwk-jose...' \
     --filter '@atproto/lex-data...' \
+    --filter '@atproto/lex-schema...' \
     --filter '@atproto/oauth-client-node...' \
     --filter '@atproto/space...' \
     --filter '@atproto/syntax...' \

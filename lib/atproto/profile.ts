@@ -1,4 +1,6 @@
-import { getBskyAgent } from "./bsky";
+import { asAtIdentifierString } from "@atproto/lex-schema";
+import { app } from "../lexicons";
+import { getBskyClient } from "./bsky";
 
 export type Profile = {
   handle: string;
@@ -7,13 +9,14 @@ export type Profile = {
 
 export async function getProfile(did: string): Promise<Profile | null> {
   try {
-    const response = await getBskyAgent().app.bsky.actor.getProfile(
-      { actor: did },
+    const profile = await getBskyClient().call(
+      app.bsky.actor.getProfile,
+      { actor: asAtIdentifierString(did) },
       { signal: AbortSignal.timeout(2500) },
     );
     return {
-      handle: response.data.handle,
-      avatar: response.data.avatar ?? null,
+      handle: profile.handle,
+      avatar: profile.avatar ?? null,
     };
   } catch {
     // A missing or unreachable profile should never stop a board from rendering.

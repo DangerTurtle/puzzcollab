@@ -1,4 +1,5 @@
 import { parseCid } from "@atproto/lex-data";
+import { asStringFormat } from "@atproto/lex-schema";
 import {
   RepoCommit,
   verifyCommit,
@@ -34,6 +35,7 @@ import { isNoteColor, isNoteRotation } from "../note-style";
 import { parseNoteImage } from "../note-image";
 import { isBoardCoordinate } from "../note-constraints";
 import { readBlobFile, storeBlobFile } from "../blob-store";
+import { com } from "../lexicons";
 import { getIdResolver, resolvePds } from "../atproto/identity";
 import { getFollowersAmong } from "../atproto/follows";
 import {
@@ -227,14 +229,17 @@ export class SyncEngine {
     await this.withCredential(watch, async (credential) => {
       let changed = false;
       const authorityPds = await resolvePds(watch.authorityDid);
-      const authorityAgent = credential.agent(authorityPds);
+      const authorityClient = credential.client(authorityPds);
       let registrationExpiresAt = watch.registrationExpiresAt;
       if (registrationNeedsRenewal(watch.registrationExpiresAt)) {
-        const registered = await authorityAgent.com.atproto.space.registerNotify({
-          space: watch.spaceUri,
-          service: SYNC_SERVICE,
-        });
-        registrationExpiresAt = registered.data.expiresAt;
+        const registered = await authorityClient.call(
+          com.atproto.space.registerNotify,
+          {
+            space: asStringFormat(watch.spaceUri, "space-ref"),
+            service: SYNC_SERVICE,
+          },
+        );
+        registrationExpiresAt = registered.expiresAt;
         if (this.isWatchInactive(watch)) return;
         await updateSpaceWatch({
           spaceUri: watch.spaceUri,
@@ -249,12 +254,12 @@ export class SyncEngine {
       const remoteRepoDids = new Set<string>();
       let cursor: string | undefined;
       do {
-        const page = await authorityAgent.com.atproto.space.listRepos({
-          space: watch.spaceUri,
+        const page = await authorityClient.call(com.atproto.space.listRepos, {
+          space: asStringFormat(watch.spaceUri, "space-ref"),
           limit: 1000,
           cursor,
         });
-        for (const repo of page.data.repos) {
+        for (const repo of page.repos) {
           remoteRepoDids.add(repo.did);
           if (this.isWatchInactive(watch)) return;
           const local = await getSyncedRepo(watch.spaceUri, repo.did);
@@ -265,7 +270,7 @@ export class SyncEngine {
             changed = true;
           }
         }
-        cursor = page.data.cursor;
+        cursor = page.cursor;
       } while (cursor);
 
       if (this.isWatchInactive(watch)) return;
@@ -284,15 +289,16 @@ export class SyncEngine {
     }
     await this.withCredential(watch, async (credential) => {
       const authorityPds = await resolvePds(watch.authorityDid);
-      const response = await credential
-        .agent(authorityPds)
-        .com.atproto.simplespace.getSpace({ space: watch.spaceUri });
+      const response = await credential.client(authorityPds).call(
+        com.atproto.simplespace.getSpace,
+        { space: asStringFormat(watch.spaceUri, "space-ref") },
+      );
       if (
-        response.data.uri !== watch.spaceUri ||
-        response.data.policy.$type !==
+        response.uri !== watch.spaceUri ||
+        response.policy.$type !==
           "com.atproto.simplespace.defs#managingAppPolicy" ||
-        !("managingApp" in response.data.policy) ||
-        response.data.policy.managingApp !== MANAGING_APP_SERVICE
+        !("managingApp" in response.policy) ||
+        response.policy.managingApp !== MANAGING_APP_SERVICE
       ) {
         throw new InvalidBulletinSpaceError();
       }
@@ -375,18 +381,21 @@ export class SyncEngine {
   private async renewRegistration(watch: SpaceWatch): Promise<void> {
     await this.withCredential(watch, async (credential) => {
       const authorityPds = await resolvePds(watch.authorityDid);
-      const authorityAgent = credential.agent(authorityPds);
-      const registered = await authorityAgent.com.atproto.space.registerNotify({
-        space: watch.spaceUri,
-        service: SYNC_SERVICE,
-      });
+      const authorityClient = credential.client(authorityPds);
+      const registered = await authorityClient.call(
+        com.atproto.space.registerNotify,
+        {
+          space: asStringFormat(watch.spaceUri, "space-ref"),
+          service: SYNC_SERVICE,
+        },
+      );
       if (this.isWatchInactive(watch)) return;
       await updateSpaceWatch({
         spaceUri: watch.spaceUri,
-        registrationExpiresAt: registered.data.expiresAt,
+        registrationExpiresAt: registered.expiresAt,
         lastError: null,
       });
-      this.scheduleRegistrationRenewal(watch, registered.data.expiresAt);
+      this.scheduleRegistrationRenewal(watch, registered.expiresAt);
     });
   }
 
@@ -450,21 +459,21 @@ export class SyncEngine {
     }
 
     try {
-      const agent = credential.agent(local.pdsUrl);
+      const client = credential.client(local.pdsUrl);
       const state = RepoCommit.fromState(local.ltHash);
       const changes: SyncedChange[] = [];
       let cursor: string | undefined;
       let commit: SignedCommit | undefined;
 
       do {
-        const page = await agent.com.atproto.space.listRepoOps({
-          space: watch.spaceUri,
-          repo: repoDid,
+        const page = await client.call(com.atproto.space.listRepoOps, {
+          space: asStringFormat(watch.spaceUri, "space-ref"),
+          repo: asStringFormat(repoDid, "did"),
           since: local.rev,
           cursor,
           limit: 1000,
         });
-        for (const op of page.data.ops) {
+        for (const op of page.ops) {
           state.applyOp({
             collection: op.collection,
             rkey: op.rkey,
@@ -481,8 +490,8 @@ export class SyncEngine {
           });
           if (change) changes.push(change);
         }
-        cursor = page.data.cursor;
-        if (page.data.commit) commit = asSignedCommit(page.data.commit);
+        cursor = page.cursor;
+        if (page.commit) commit = asSignedCommit(page.commit);
       } while (cursor);
 
       if (!commit) throw new Error("Incremental sync did not reach a commit");
@@ -614,12 +623,14 @@ export class SyncEngine {
 
       let bytes = readBlobFile(image.cid) ?? undefined;
       if (!bytes || bytes.length !== image.size) {
-        const response = await credential.agent(pdsUrl).com.atproto.space.getBlob({
-          space: spaceUri,
-          repo: authorDid,
-          cid: image.cid,
-        });
-        bytes = response.data;
+        bytes = await credential.client(pdsUrl).call(
+          com.atproto.space.getBlob,
+          {
+            space: asStringFormat(spaceUri, "space-ref"),
+            repo: asStringFormat(authorDid, "did"),
+            cid: image.cid,
+          },
+        );
       }
       if (bytes.length !== image.size) {
         throw new Error(`Image blob had an unexpected size (${image.cid})`);
