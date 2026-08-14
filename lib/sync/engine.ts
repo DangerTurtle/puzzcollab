@@ -6,15 +6,19 @@ import {
   type SignedCommit,
 } from "@atproto/space";
 import {
+  MANAGING_APP_SERVICE,
   LABEL_COLLECTION,
   POSITION_COLLECTION,
   POST_COLLECTION,
   SYNC_SERVICE,
+  boardUri,
 } from "../config";
 import {
   applySyncedChanges,
+  deleteSyncedReposExcept,
   deleteSyncedSpace,
   getSyncedRepo,
+  hideSyncedSpace,
   listSpaceWatches,
   replaceRepoRecords,
   saveBoard,
@@ -37,7 +41,11 @@ import {
   type SpaceCredential,
 } from "../atproto/space-credential";
 import { orderCredentialCandidates } from "./credential-candidates";
-import { isSpaceDeletedError } from "./errors";
+import {
+  isSpaceDeletedError,
+  isSpaceNotFoundError,
+  WatchInvalidatedError,
+} from "./errors";
 import {
   REGISTRATION_RETRY_MS,
   registrationRenewalDelay,
@@ -50,8 +58,11 @@ type SyncedBlob = SpaceBlob & { bytes: Uint8Array };
 export class SyncEngine {
   private credentials = new Map<string, SpaceCredential>();
   private jobs = new Map<string, Promise<void>>();
-  private deletedSpaces = new Set<string>();
-  private registrationTimers = new Map<
+  private reconciliations = new Map<string, Promise<void>>();
+  private removals = new Map<string, Promise<void>>();
+  private spaceGenerations = new Map<string, number>();
+  private watchGenerations = new WeakMap<SpaceWatch, number>();
+  private maintenanceTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
   >();
@@ -59,64 +70,160 @@ export class SyncEngine {
   constructor(private readonly onChange: OnChange) {}
 
   async resume(): Promise<void> {
+    const generations = new Map(this.spaceGenerations);
     const watches = await listSpaceWatches();
     await Promise.all(
-      watches.map((watch) =>
-        this.reconcile(watch).catch(async (error) => {
+      watches.map(async (watch) => {
+        if (
+          this.removals.has(watch.spaceUri) ||
+          (this.spaceGenerations.get(watch.spaceUri) ?? 0) !==
+            (generations.get(watch.spaceUri) ?? 0)
+        ) {
+          return;
+        }
+        this.bindWatch(watch);
+        try {
+          await this.refreshWatch(watch);
+        } catch (error) {
+          if (isSpaceDeletedError(error)) return;
+          if (isInvalidWatchError(error)) {
+            await this.removeWatch(watch);
+            return;
+          }
+          if (this.isWatchInactive(watch)) return;
+          this.scheduleReconcileRetry(watch);
           await this.recordError(watch.spaceUri, error);
-          this.scheduleRegistrationRetry(watch);
-        }),
-      ),
+        }
+      }),
     );
   }
 
   async watch(space: string): Promise<void> {
-    if (this.deletedSpaces.has(space)) throw new Error("Space has been deleted");
+    await this.removals.get(space);
     const authorityDid = authorityFromSpace(space);
-    await saveSpaceWatch({ spaceUri: space, authorityDid });
-    const watch = (await listSpaceWatches()).find(
+    if (space !== boardUri(authorityDid)) {
+      throw new WatchInvalidatedError();
+    }
+    const generation = this.spaceGenerations.get(space) ?? 0;
+    const existing = (await listSpaceWatches()).find(
       (item) => item.spaceUri === space,
     );
-    if (!watch) throw new Error("Could not save board subscription");
+    if (
+      this.removals.has(space) ||
+      generation !== (this.spaceGenerations.get(space) ?? 0)
+    ) {
+      throw new WatchInvalidatedError();
+    }
+    const watch: SpaceWatch =
+      existing ?? {
+        spaceUri: space,
+        authorityDid,
+        registrationExpiresAt: null,
+        lastError: null,
+      };
+    this.bindWatch(watch);
     try {
-      await this.reconcile(watch);
+      await this.assertBulletinSpace(watch);
     } catch (error) {
+      if (isInvalidWatchError(error)) {
+        if (existing) await this.removeWatch(watch);
+        throw new WatchInvalidatedError();
+      }
+      throw error;
+    }
+    this.assertWatchActive(watch);
+    const newlyInserted = !existing;
+    if (newlyInserted) {
+      await saveSpaceWatch({ spaceUri: space, authorityDid });
+      if (this.isWatchInactive(watch)) {
+        await this.startWatchRemoval(space);
+        throw new WatchInvalidatedError();
+      }
+    }
+    try {
+      await this.runReconcile(watch);
+      this.assertWatchActive(watch);
+    } catch (error) {
+      if (isSpaceNotFoundError(error)) {
+        await this.removeWatch(watch);
+        throw error;
+      }
+      if (isSpaceDeletedError(error)) throw error;
+      if (this.isWatchInactive(watch)) throw error;
+      this.scheduleReconcileRetry(watch);
       await this.recordError(watch.spaceUri, error);
-      this.scheduleRegistrationRetry(watch);
       throw error;
     }
   }
 
   async notify(input: NotifyInput): Promise<void> {
-    if (this.deletedSpaces.has(input.space)) return;
+    if (this.removals.has(input.space)) return;
+    const generation = this.spaceGenerations.get(input.space) ?? 0;
     const watch = (await listSpaceWatches()).find(
       (item) => item.spaceUri === input.space,
     );
-    if (!watch) return;
+    if (
+      !watch ||
+      this.removals.has(input.space) ||
+      generation !== (this.spaceGenerations.get(input.space) ?? 0)
+    ) {
+      return;
+    }
+    this.watchGenerations.set(watch, generation);
     await this.enqueue(input.space, input.repo, async () => {
-      if (this.deletedSpaces.has(input.space)) return;
+      if (this.isWatchInactive(watch)) return;
       await this.syncRepo(watch, input.repo);
-      if (this.deletedSpaces.has(input.space)) return;
+      if (this.isWatchInactive(watch)) return;
       this.onChange(input.space);
     });
   }
 
-  async deleteSpace(space: string): Promise<void> {
-    this.deletedSpaces.add(space);
+  async deleteSpace(
+    space: string,
+    { waitForRemoval = false }: { waitForRemoval?: boolean } = {},
+  ): Promise<void> {
+    this.invalidateWatches(space);
     this.credentials.delete(space);
-    const timer = this.registrationTimers.get(space);
+    const timer = this.maintenanceTimers.get(space);
     if (timer) clearTimeout(timer);
-    this.registrationTimers.delete(space);
-    await deleteSyncedSpace(space);
-    this.onChange(space);
+    this.maintenanceTimers.delete(space);
+    await hideSyncedSpace(space);
+    const removal = this.startWatchRemoval(space);
+    if (waitForRemoval) {
+      await removal;
+    } else {
+      void removal.catch((error) => {
+        console.error(`could not delete synced space ${space}`, error);
+      });
+    }
   }
 
   stop(): void {
-    for (const timer of this.registrationTimers.values()) clearTimeout(timer);
-    this.registrationTimers.clear();
+    for (const timer of this.maintenanceTimers.values()) clearTimeout(timer);
+    this.maintenanceTimers.clear();
+  }
+
+  private async runReconcile(watch: SpaceWatch): Promise<void> {
+    const existing = this.reconciliations.get(watch.spaceUri);
+    if (existing) return existing;
+    const task = this.reconcile(watch);
+    this.reconciliations.set(watch.spaceUri, task);
+    try {
+      await task;
+    } finally {
+      if (this.reconciliations.get(watch.spaceUri) === task) {
+        this.reconciliations.delete(watch.spaceUri);
+      }
+    }
+  }
+
+  private async refreshWatch(watch: SpaceWatch): Promise<void> {
+    await this.assertBulletinSpace(watch);
+    await this.runReconcile(watch);
   }
 
   private async reconcile(watch: SpaceWatch): Promise<void> {
+    if (this.isWatchInactive(watch)) return;
     await this.withCredential(watch, async (credential) => {
       let changed = false;
       const authorityPds = await resolvePds(watch.authorityDid);
@@ -128,6 +235,7 @@ export class SyncEngine {
           service: SYNC_SERVICE,
         });
         registrationExpiresAt = registered.data.expiresAt;
+        if (this.isWatchInactive(watch)) return;
         await updateSpaceWatch({
           spaceUri: watch.spaceUri,
           registrationExpiresAt,
@@ -138,6 +246,7 @@ export class SyncEngine {
         this.scheduleRegistrationRenewal(watch, registrationExpiresAt);
       }
 
+      const remoteRepoDids = new Set<string>();
       let cursor: string | undefined;
       do {
         const page = await authorityAgent.com.atproto.space.listRepos({
@@ -146,7 +255,8 @@ export class SyncEngine {
           cursor,
         });
         for (const repo of page.data.repos) {
-          if (this.deletedSpaces.has(watch.spaceUri)) return;
+          remoteRepoDids.add(repo.did);
+          if (this.isWatchInactive(watch)) return;
           const local = await getSyncedRepo(watch.spaceUri, repo.did);
           if (!local || local.rev !== repo.rev) {
             await this.enqueue(watch.spaceUri, repo.did, () =>
@@ -158,11 +268,102 @@ export class SyncEngine {
         cursor = page.data.cursor;
       } while (cursor);
 
-      if (this.deletedSpaces.has(watch.spaceUri)) return;
+      if (this.isWatchInactive(watch)) return;
+      changed =
+        (await deleteSyncedReposExcept(watch.spaceUri, remoteRepoDids)) || changed;
+      if (this.isWatchInactive(watch)) return;
       await saveBoard(watch.spaceUri, watch.authorityDid);
       await updateSpaceWatch({ spaceUri: watch.spaceUri, lastError: null });
       if (changed) this.onChange(watch.spaceUri);
     });
+  }
+
+  private async assertBulletinSpace(watch: SpaceWatch): Promise<void> {
+    if (watch.spaceUri !== boardUri(watch.authorityDid)) {
+      throw new InvalidBulletinSpaceError();
+    }
+    await this.withCredential(watch, async (credential) => {
+      const authorityPds = await resolvePds(watch.authorityDid);
+      const response = await credential
+        .agent(authorityPds)
+        .com.atproto.simplespace.getSpace({ space: watch.spaceUri });
+      if (
+        response.data.uri !== watch.spaceUri ||
+        response.data.policy.$type !==
+          "com.atproto.simplespace.defs#managingAppPolicy" ||
+        !("managingApp" in response.data.policy) ||
+        response.data.policy.managingApp !== MANAGING_APP_SERVICE
+      ) {
+        throw new InvalidBulletinSpaceError();
+      }
+    });
+  }
+
+  private async removeWatch(watch: SpaceWatch): Promise<void> {
+    if (this.isWatchInactive(watch)) {
+      await this.removals.get(watch.spaceUri);
+      return;
+    }
+    const { spaceUri } = watch;
+    this.invalidateWatches(spaceUri);
+    this.credentials.delete(spaceUri);
+    const timer = this.maintenanceTimers.get(spaceUri);
+    if (timer) clearTimeout(timer);
+    this.maintenanceTimers.delete(spaceUri);
+    await this.startWatchRemoval(spaceUri);
+  }
+
+  private startWatchRemoval(space: string): Promise<void> {
+    const existing = this.removals.get(space);
+    if (existing) return existing;
+    const removal = this.finishWatchRemoval(space);
+    this.removals.set(space, removal);
+    void removal.then(
+      () => {
+        if (this.removals.get(space) === removal) this.removals.delete(space);
+      },
+      () => {
+        if (this.removals.get(space) === removal) this.removals.delete(space);
+      },
+    );
+    return removal;
+  }
+
+  private async finishWatchRemoval(space: string): Promise<void> {
+    const reconcileJob = this.reconciliations.get(space);
+    const repoJobs = [...this.jobs.entries()]
+      .filter(([key]) => key.startsWith(`${space}|`))
+      .map(([, job]) => job);
+    await Promise.allSettled([
+      ...(reconcileJob ? [reconcileJob] : []),
+      ...repoJobs,
+    ]);
+    await deleteSyncedSpace(space);
+    this.onChange(space);
+  }
+
+  private bindWatch(watch: SpaceWatch): void {
+    this.watchGenerations.set(
+      watch,
+      this.spaceGenerations.get(watch.spaceUri) ?? 0,
+    );
+  }
+
+  private invalidateWatches(space: string): void {
+    this.spaceGenerations.set(space, (this.spaceGenerations.get(space) ?? 0) + 1);
+  }
+
+  private isWatchInactive(watch: SpaceWatch): boolean {
+    return (
+      this.watchGenerations.get(watch) !==
+        (this.spaceGenerations.get(watch.spaceUri) ?? 0)
+    );
+  }
+
+  private assertWatchActive(watch: SpaceWatch): void {
+    if (this.isWatchInactive(watch)) {
+      throw new WatchInvalidatedError();
+    }
   }
 
   private async syncRepo(watch: SpaceWatch, repoDid: string): Promise<void> {
@@ -179,7 +380,7 @@ export class SyncEngine {
         space: watch.spaceUri,
         service: SYNC_SERVICE,
       });
-      if (this.deletedSpaces.has(watch.spaceUri)) return;
+      if (this.isWatchInactive(watch)) return;
       await updateSpaceWatch({
         spaceUri: watch.spaceUri,
         registrationExpiresAt: registered.data.expiresAt,
@@ -193,34 +394,47 @@ export class SyncEngine {
     watch: SpaceWatch,
     expiresAt: string,
   ): void {
-    this.scheduleRegistration(
+    this.scheduleMaintenance(
       watch,
       registrationRenewalDelay(expiresAt),
+      "renew",
     );
   }
 
-  private scheduleRegistrationRetry(watch: SpaceWatch): void {
-    if (this.deletedSpaces.has(watch.spaceUri)) return;
-    if (this.registrationTimers.has(watch.spaceUri)) return;
-    this.scheduleRegistration(watch, REGISTRATION_RETRY_MS);
+  private scheduleReconcileRetry(watch: SpaceWatch): void {
+    if (this.isWatchInactive(watch)) return;
+    this.scheduleMaintenance(watch, REGISTRATION_RETRY_MS, "reconcile");
   }
 
-  private scheduleRegistration(watch: SpaceWatch, delay: number): void {
-    if (this.deletedSpaces.has(watch.spaceUri)) return;
-    const existing = this.registrationTimers.get(watch.spaceUri);
+  private scheduleMaintenance(
+    watch: SpaceWatch,
+    delay: number,
+    task: "renew" | "reconcile",
+  ): void {
+    if (this.isWatchInactive(watch)) return;
+    const existing = this.maintenanceTimers.get(watch.spaceUri);
     if (existing) clearTimeout(existing);
 
     const timer = setTimeout(() => {
-      this.registrationTimers.delete(watch.spaceUri);
-      void this.renewRegistration(watch)
+      this.maintenanceTimers.delete(watch.spaceUri);
+      const operation = task === "reconcile"
+        ? this.refreshWatch(watch)
+        : this.renewRegistration(watch);
+      void operation
         .catch(async (error) => {
+          if (isSpaceDeletedError(error)) return;
+          if (isInvalidWatchError(error)) {
+            await this.removeWatch(watch);
+            return;
+          }
+          if (this.isWatchInactive(watch)) return;
+          this.scheduleReconcileRetry(watch);
           await this.recordError(watch.spaceUri, error);
-          this.scheduleRegistrationRetry(watch);
         })
         .catch((error) => console.error("could not record sync error", error));
     }, delay);
     timer.unref();
-    this.registrationTimers.set(watch.spaceUri, timer);
+    this.maintenanceTimers.set(watch.spaceUri, timer);
   }
 
   private async syncRepoWithCredential(
@@ -228,10 +442,10 @@ export class SyncEngine {
     repoDid: string,
     credential: SpaceCredential,
   ): Promise<void> {
-    if (this.deletedSpaces.has(watch.spaceUri)) return;
+    if (this.isWatchInactive(watch)) return;
     const local = await getSyncedRepo(watch.spaceUri, repoDid);
     if (!local) {
-      await this.recoverRepo(watch.spaceUri, repoDid, credential);
+      await this.recoverRepo(watch, repoDid, credential);
       return;
     }
 
@@ -287,7 +501,7 @@ export class SyncEngine {
         local.pdsUrl,
         credential,
       );
-      if (this.deletedSpaces.has(watch.spaceUri)) return;
+      if (this.isWatchInactive(watch)) return;
       await applySyncedChanges(changes, stripBlobBytes(blobs));
       storeBlobFiles(blobs);
       await saveSyncedRepo({
@@ -299,17 +513,18 @@ export class SyncEngine {
         commitHash: commit.hash,
       });
     } catch (error) {
-      if (this.deletedSpaces.has(watch.spaceUri)) return;
+      if (this.isWatchInactive(watch)) return;
       console.warn(`incremental sync fell back to recovery for ${repoDid}`, error);
-      await this.recoverRepo(watch.spaceUri, repoDid, credential);
+      await this.recoverRepo(watch, repoDid, credential);
     }
   }
 
   private async recoverRepo(
-    space: string,
+    watch: SpaceWatch,
     repoDid: string,
     credential: SpaceCredential,
   ): Promise<void> {
+    const space = watch.spaceUri;
     const pdsUrl = await resolvePds(repoDid);
     const url = new URL(`${pdsUrl}/xrpc/com.atproto.space.getRepo`);
     url.searchParams.set("space", space);
@@ -347,7 +562,7 @@ export class SyncEngine {
     }
 
     const blobs = await this.fetchImageBlobs(postChanges, pdsUrl, credential);
-    if (this.deletedSpaces.has(space)) return;
+    if (this.isWatchInactive(watch)) return;
     await replaceRepoRecords({
       spaceUri: space,
       authorDid: repoDid,
@@ -440,6 +655,7 @@ export class SyncEngine {
           await this.deleteSpace(watch.spaceUri);
           throw error;
         }
+        if (isSpaceNotFoundError(error)) throw error;
         if (attempt > 0) throw error;
         this.credentials.delete(watch.spaceUri);
       }
@@ -466,7 +682,9 @@ export class SyncEngine {
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
-        if (isSpaceDeletedError(error)) throw error;
+        if (isSpaceDeletedError(error) || isSpaceNotFoundError(error)) {
+          throw error;
+        }
         lastError = error;
         console.warn(
           `could not mint sync credential for ${watch.authorityDid}`,
@@ -490,7 +708,9 @@ export class SyncEngine {
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
-        if (isSpaceDeletedError(error)) throw error;
+        if (isSpaceDeletedError(error) || isSpaceNotFoundError(error)) {
+          throw error;
+        }
         lastError = error;
         console.warn(`could not mint sync credential for ${did}`, error);
       }
@@ -517,6 +737,19 @@ export class SyncEngine {
       lastError: error instanceof Error ? error.message : "Sync failed",
     });
   }
+}
+
+class InvalidBulletinSpaceError extends Error {
+  constructor() {
+    super("Space is not managed by Bulletin");
+    this.name = "InvalidBulletinSpaceError";
+  }
+}
+
+function isInvalidWatchError(error: unknown): boolean {
+  return (
+    error instanceof InvalidBulletinSpaceError || isSpaceNotFoundError(error)
+  );
 }
 
 export function parseChange(input: {

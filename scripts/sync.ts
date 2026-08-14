@@ -10,6 +10,7 @@ import {
   verifySpaceDeletionNotification,
   verifySyncNotification,
 } from "../lib/sync/service-auth";
+import { isBoardAbsentError } from "../lib/sync/errors";
 
 const clients = new Map<string, Set<ServerResponse>>();
 const engine = new SyncEngine((space) => broadcast(space));
@@ -56,7 +57,14 @@ const server = createServer(async (request, response) => {
       if (typeof body.space !== "string") {
         return json(response, 400, { error: "Invalid board subscription" });
       }
-      await engine.watch(body.space);
+      try {
+        await engine.watch(body.space);
+      } catch (error) {
+        if (isBoardAbsentError(error)) {
+          return json(response, 404, { error: "Board not found" });
+        }
+        throw error;
+      }
       return json(response, 200, { ok: true });
     }
     if (
@@ -95,7 +103,7 @@ const server = createServer(async (request, response) => {
         ? request.headers.authorization[0]
         : request.headers.authorization;
       await verifySpaceDeletionNotification(authorization, body.space);
-      await engine.deleteSpace(body.space);
+      await engine.deleteSpace(body.space, { waitForRemoval: true });
       return json(response, 200, {});
     }
     return json(response, 404, { error: "Not found" });
@@ -107,7 +115,7 @@ const server = createServer(async (request, response) => {
 
 const syncUrl = new URL(SYNC_URL);
 const port = Number(syncUrl.port || 3001);
-server.listen(port, "0.0.0.0", () => {
+server.listen(port, "127.0.0.1", () => {
   console.log(`Bulletin sync service ${SYNC_URL}`);
   void engine.resume();
 });

@@ -7,9 +7,14 @@ import { getRelationship, type Relationship } from "@/lib/atproto/follows";
 import { getProfile } from "@/lib/atproto/profile";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
 import { getSession } from "@/lib/auth/session";
+import { discoverBoardForDid } from "@/lib/board-discovery";
 import { boardUri } from "@/lib/config";
-import { getAccount, hasBoard, listBoardPosts } from "@/lib/db/queries";
-import { watchBoard } from "@/lib/sync/client";
+import {
+  getAccount,
+  hasBoard,
+  hasSpaceWatch,
+  listBoardPosts,
+} from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -42,34 +47,6 @@ export default async function BoardPage({
     );
   }
 
-  if (ownBoard && !(await hasBoard(ownerDid))) {
-    return (
-      <main className="shell">
-        <Header did={session.did} />
-        <div className="card gate stack">
-          <h2>Your board isn’t up yet</h2>
-          <p>Put up your board and start collecting notes.</p>
-          <CreateBoardButton />
-        </div>
-      </main>
-    );
-  }
-
-  if (!ownBoard && !(await hasBoard(ownerDid))) {
-    return (
-      <main className="shell">
-        <Header did={session.did} />
-        <div className="card gate stack">
-          <h2>No board here yet</h2>
-          <p>
-            {owner?.handle ? `@${owner.handle}` : "This person"} has not created
-            a board yet.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
   let relationship: Relationship | undefined;
   if (!ownBoard) {
     try {
@@ -97,12 +74,51 @@ export default async function BoardPage({
     }
   }
 
-  try {
-    await watchBoard(space);
-  } catch (error) {
-    // Read authorization is the relationship check above. A sync outage should
-    // not turn into an access decision; serve the last verified materialization.
-    console.error("Could not refresh board", error);
+  let boardExists = await hasBoard(ownerDid);
+  if (!boardExists || !(await hasSpaceWatch(space))) {
+    try {
+      boardExists = await discoverBoardForDid(ownerDid);
+    } catch (error) {
+      // A sync outage should not hide a previously verified board. After a fresh
+      // database, though, there is no safe local state to serve yet.
+      console.error("Could not discover board", error);
+      boardExists = await hasBoard(ownerDid);
+      if (!boardExists) {
+        return (
+          <BoardUnavailable
+            viewerDid={session.did}
+            ownerHandle={owner?.handle}
+          />
+        );
+      }
+    }
+  }
+
+  if (!boardExists) {
+    if (ownBoard) {
+      return (
+        <main className="shell">
+          <Header did={session.did} />
+          <div className="card gate stack">
+            <h2>Your board isn’t up yet</h2>
+            <p>Put up your board and start collecting notes.</p>
+            <CreateBoardButton />
+          </div>
+        </main>
+      );
+    }
+    return (
+      <main className="shell">
+        <Header did={session.did} />
+        <div className="card gate stack">
+          <h2>No board here yet</h2>
+          <p>
+            {owner?.handle ? `@${owner.handle}` : "This person"} has not created
+            a board yet.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   const posts = await listBoardPosts(space, ownerDid);

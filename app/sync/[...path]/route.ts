@@ -15,8 +15,24 @@ export function POST(request: NextRequest, context: Context) {
 }
 
 async function proxy(request: NextRequest, { params }: Context): Promise<Response> {
-  const path = (await params).path.join("/");
-  const target = new URL(path, `${SYNC_URL.replace(/\/$/, "")}/`);
+  const segments = (await params).path;
+  if (
+    segments.some(
+      (segment) => segment.includes("/") || segment.includes("\\"),
+    )
+  ) {
+    return new Response("Not found", { status: 404 });
+  }
+  const path = segments.join("/");
+  const base = new URL(`${SYNC_URL.replace(/\/$/, "")}/`);
+  const target = new URL(path, base);
+  if (
+    target.origin !== base.origin ||
+    target.pathname === "/watch" ||
+    target.pathname === "/watch/"
+  ) {
+    return new Response("Not found", { status: 404 });
+  }
   target.search = request.nextUrl.search;
   const headers = new Headers(request.headers);
   headers.delete("host");

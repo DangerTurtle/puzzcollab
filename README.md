@@ -34,6 +34,9 @@ on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
 
 The `dev` script migrates SQLite and publishes the `at.dholms.bulletin`
 Lexicons to the test network's Lexicon authority before starting Next.js.
+On sign-in, Bulletin rediscovers the user's deterministic board. Other boards
+are discovered on demand the first time someone opens them, without scanning
+the viewer's follow list.
 
 ## Key pieces
 

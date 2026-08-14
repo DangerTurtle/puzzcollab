@@ -198,6 +198,22 @@ export async function listSpaceWatches(): Promise<SpaceWatch[]> {
     .execute();
 }
 
+export async function hasSpaceWatch(spaceUri: string): Promise<boolean> {
+  const row = await getQueryDb()
+    .selectFrom("syncSpace")
+    .select("spaceUri")
+    .where("spaceUri", "=", spaceUri)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+export async function hideSyncedSpace(spaceUri: string): Promise<void> {
+  await getQueryDb().transaction().execute(async (trx) => {
+    await trx.deleteFrom("syncSpace").where("spaceUri", "=", spaceUri).execute();
+    await trx.deleteFrom("board").where("spaceUri", "=", spaceUri).execute();
+  });
+}
+
 export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
   const db = getQueryDb();
   const dereferenced = await db.transaction().execute(async (trx) => {
@@ -284,6 +300,63 @@ export async function saveSyncedRepo(input: SyncedRepo): Promise<void> {
       })),
     )
     .execute();
+}
+
+export async function deleteSyncedReposExcept(
+  spaceUri: string,
+  repoDids: ReadonlySet<string>,
+): Promise<boolean> {
+  const db = getQueryDb();
+  const localRepos = await db
+    .selectFrom("syncRepo")
+    .select("repoDid")
+    .where("spaceUri", "=", spaceUri)
+    .execute();
+  const staleRepoDids = localRepos
+    .map(({ repoDid }) => repoDid)
+    .filter((repoDid) => !repoDids.has(repoDid));
+  if (staleRepoDids.length === 0) return false;
+
+  const dereferenced = await db.transaction().execute(async (trx) => {
+    const cids: string[] = [];
+    for (const repoDid of staleRepoDids) {
+      const blobs = await trx
+        .selectFrom("spaceBlob")
+        .select("cid")
+        .where("spaceUri", "=", spaceUri)
+        .where("repoDid", "=", repoDid)
+        .execute();
+      cids.push(...blobs.map(({ cid }) => cid));
+      await trx
+        .deleteFrom("spaceBlob")
+        .where("spaceUri", "=", spaceUri)
+        .where("repoDid", "=", repoDid)
+        .execute();
+      await trx
+        .deleteFrom("post")
+        .where("spaceUri", "=", spaceUri)
+        .where("authorDid", "=", repoDid)
+        .execute();
+      await trx
+        .deleteFrom("moderationLabel")
+        .where("spaceUri", "=", spaceUri)
+        .where("authorDid", "=", repoDid)
+        .execute();
+      await trx
+        .deleteFrom("notePosition")
+        .where("spaceUri", "=", spaceUri)
+        .where("authorDid", "=", repoDid)
+        .execute();
+      await trx
+        .deleteFrom("syncRepo")
+        .where("spaceUri", "=", spaceUri)
+        .where("repoDid", "=", repoDid)
+        .execute();
+    }
+    return cids;
+  });
+  await deleteUnreferencedBlobFiles(db, dereferenced);
+  return true;
 }
 
 export async function replaceRepoRecords(input: {

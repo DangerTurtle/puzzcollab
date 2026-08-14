@@ -8,6 +8,7 @@ import {
   webSessionCookieOptions,
 } from "@/lib/auth/web-session";
 import { APP_UI_URL } from "@/lib/config";
+import { discoverBoardForDid } from "@/lib/board-discovery";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -18,6 +19,9 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams,
     );
     await cacheIdentity(session.did);
+    await discoverBoardForDid(session.did).catch((error) => {
+      console.error("Could not rediscover the signed-in user's board", error);
+    });
     const previousToken = request.cookies.get(WEB_SESSION_COOKIE_NAME)?.value;
     if (previousToken) await deleteWebSession(previousToken);
     const token = await createWebSession(session.did);

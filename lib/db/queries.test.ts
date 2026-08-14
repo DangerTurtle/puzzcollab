@@ -5,13 +5,18 @@ process.env.DATABASE_PATH = ":memory:";
 
 const { migrate } = await import("./migrations");
 const {
+  deleteSyncedReposExcept,
   getAccount,
+  getPost,
   getSyncedRepo,
   hasBoard,
+  hasSpaceWatch,
+  hideSyncedSpace,
   listBoardPosts,
   listBoards,
   saveAccount,
   saveBoard,
+  saveSpaceWatch,
   saveSyncedRepo,
   upsertLabel,
   upsertPosition,
@@ -38,6 +43,18 @@ test("account and board queries return typed application rows", async () => {
   assert.deepEqual(await listBoards(), [
     { ownerDid: "did:plc:owner", handle: "owner.test" },
   ]);
+});
+
+test("space watches can be checked without materializing a board", async () => {
+  const spaceUri = "at://did:plc:watched/space/example.board/self";
+  assert.equal(await hasSpaceWatch(spaceUri), false);
+  await saveBoard(spaceUri, "did:plc:watched");
+  await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:watched" });
+  assert.equal(await hasSpaceWatch(spaceUri), true);
+  assert.equal(await hasBoard("did:plc:watched"), true);
+  await hideSyncedSpace(spaceUri);
+  assert.equal(await hasSpaceWatch(spaceUri), false);
+  assert.equal(await hasBoard("did:plc:watched"), false);
 });
 
 test("board materialization applies owner moderation and positioning", async () => {
@@ -125,5 +142,42 @@ test("sync repository hashes round-trip as byte arrays", async () => {
       ltHash: new Uint8Array([1, 2]),
       commitHash: new Uint8Array([3, 4]),
     },
+  );
+});
+
+test("reconciliation removes repositories absent from the remote space", async () => {
+  const spaceUri = "at://did:plc:owner/space/example.board/recreated";
+  const retainedDid = "did:plc:retained";
+  const staleDid = "did:plc:stale";
+  for (const repoDid of [retainedDid, staleDid]) {
+    await saveSyncedRepo({
+      spaceUri,
+      repoDid,
+      pdsUrl: "https://pds.test",
+      rev: "1",
+      ltHash: new Uint8Array([1]),
+      commitHash: new Uint8Array([2]),
+    });
+  }
+  const stalePostUri = `${spaceUri}/${staleDid}/example.post/old`;
+  await upsertPost({
+    uri: stalePostUri,
+    cid: "stale-cid",
+    spaceUri,
+    authorDid: staleDid,
+    text: "from the deleted board",
+    createdAt: new Date().toISOString(),
+  });
+
+  assert.equal(
+    await deleteSyncedReposExcept(spaceUri, new Set([retainedDid])),
+    true,
+  );
+  assert.notEqual(await getSyncedRepo(spaceUri, retainedDid), null);
+  assert.equal(await getSyncedRepo(spaceUri, staleDid), null);
+  assert.equal(await getPost(stalePostUri), null);
+  assert.equal(
+    await deleteSyncedReposExcept(spaceUri, new Set([retainedDid])),
+    false,
   );
 });
