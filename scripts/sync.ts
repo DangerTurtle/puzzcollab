@@ -14,6 +14,8 @@ import { isBoardAbsentError } from "../lib/sync/errors";
 
 const clients = new Map<string, Set<ServerResponse>>();
 const engine = new SyncEngine((space) => broadcast(space));
+const pollInterval = parsePollInterval(process.env.SYNC_POLL_INTERVAL_MS);
+let resumeTask: Promise<void> | undefined;
 
 const server = createServer(async (request, response) => {
   try {
@@ -117,8 +119,13 @@ const syncUrl = new URL(SYNC_URL);
 const port = Number(syncUrl.port || 3001);
 server.listen(port, "127.0.0.1", () => {
   console.log(`Bulletin sync service ${SYNC_URL}`);
-  void engine.resume();
+  resume();
 });
+
+const reconcileTimer = pollInterval
+  ? setInterval(resume, pollInterval)
+  : undefined;
+reconcileTimer?.unref();
 
 const heartbeatTimer = setInterval(() => {
   for (const group of clients.values()) {
@@ -130,8 +137,29 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     engine.stop();
     clearInterval(heartbeatTimer);
+    if (reconcileTimer) clearInterval(reconcileTimer);
     server.close(() => process.exit(0));
   });
+}
+
+function resume(): void {
+  if (resumeTask) return;
+  const task = engine.resume();
+  resumeTask = task;
+  void task
+    .catch((error) => console.error("sync reconciliation failed", error))
+    .finally(() => {
+      if (resumeTask === task) resumeTask = undefined;
+    });
+}
+
+function parsePollInterval(value: string | undefined): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  const interval = Number(value);
+  if (!Number.isSafeInteger(interval) || interval < 1000) {
+    throw new Error("SYNC_POLL_INTERVAL_MS must be an integer of at least 1000");
+  }
+  return interval;
 }
 
 function broadcast(space: string): void {

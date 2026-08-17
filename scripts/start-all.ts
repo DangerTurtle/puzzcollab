@@ -2,16 +2,28 @@ import { spawn, type ChildProcess } from "node:child_process";
 
 const children: ChildProcess[] = [];
 let stopping = false;
+const development = process.argv.includes("--dev");
 
 children.push(
   spawn(process.execPath, ["--import", "tsx", "scripts/sync.ts"], {
     stdio: "inherit",
     env: process.env,
   }),
-  spawn("pnpm", ["exec", "next", "start", "--hostname", "0.0.0.0"], {
-    stdio: "inherit",
-    env: process.env,
-  }),
+  spawn(
+    "pnpm",
+    [
+      "exec",
+      "next",
+      development ? "dev" : "start",
+      ...(development ? ["--webpack"] : []),
+      "--hostname",
+      development ? "127.0.0.1" : "0.0.0.0",
+    ],
+    {
+      stdio: "inherit",
+      env: process.env,
+    },
+  ),
 );
 
 function stop(signal: NodeJS.Signals = "SIGTERM") {

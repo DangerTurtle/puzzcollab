@@ -11,6 +11,8 @@ inside the same space. Labels never leak through the public label stream.
 
 ## Run locally
 
+### Against the local multi-PDS testnet
+
 The demo targets the `permissioned-data` branch in the sibling `../atproto`
 checkout and Node 22 or newer.
 
@@ -26,17 +28,36 @@ Then start Bulletin:
 ```sh
 cd ../spaces-demo-codex
 pnpm install
-pnpm dev
+pnpm dev:local
 ```
 
 Open <http://127.0.0.1:3000>. The dev network seeds `alice`, `bob`, and `carol`
 on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
 
-The `dev` script migrates SQLite and publishes the `at.dholms.bulletin`
+The `dev:local` script migrates SQLite and publishes the `at.dholms.bulletin`
 Lexicons to the test network's Lexicon authority before starting Next.js.
 On sign-in, Bulletin rediscovers the user's deterministic board. Other boards
 are discovered on demand the first time someone opens them, without scanning
 the viewer's follow list.
+
+### Run locally with production Atmosphere accounts
+
+To run the UI and sync worker locally while signing in with production
+Atmosphere accounts, use:
+
+```sh
+pnpm dev
+```
+
+Open <http://127.0.0.1:3000>. This mode loads `.env.atmosphere`, uses the
+production PLC and handle resolver, and stores state in
+`bulletin-atmosphere.db` so it cannot mix with local-testnet sessions. It does
+not start the multi-PDS network or publish Lexicons. It uses the deployed
+`bulletin.dholms.at` managing-app and sync identities, so that production PDSes
+can resolve and call those services even though the development server and its
+database are local. PDS notifications therefore go to the deployed sync
+service; the local sync worker reconciles watched boards every 10 seconds to
+keep its isolated database current.
 
 ## Key pieces
 

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm migrate && pnpm publish-lexicons && next dev --webpack --hostname 0.0.0.0",
+    "dev": "node --import tsx scripts/dev-atmosphere.ts",
+    "dev:local": "pnpm migrate && pnpm publish-lexicons && next dev --webpack --hostname 0.0.0.0",
     "build": "pnpm codegen:lex && next build --webpack",
     "start": "pnpm migrate && next start --hostname 0.0.0.0",
     "railway:start": "pnpm migrate && node --import tsx scripts/start-all.ts",
