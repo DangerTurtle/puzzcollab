@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth/session";
-import { boardUri, SYNC_URL } from "@/lib/config";
+import { boardUri, getRuntimeConfig } from "@/lib/config";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid board" }, { status: 400 });
   }
   const upstream = await fetch(
-    `${SYNC_URL}/events?space=${encodeURIComponent(boardUri(ownerDid))}`,
+    `${getRuntimeConfig().syncInternalUrl}/events?space=${encodeURIComponent(boardUri(ownerDid))}`,
     { cache: "no-store", signal: request.signal },
   );
   if (!upstream.ok || !upstream.body) {

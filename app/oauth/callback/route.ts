@@ -7,13 +7,14 @@ import {
   WEB_SESSION_COOKIE_NAME,
   webSessionCookieOptions,
 } from "@/lib/auth/web-session";
-import { APP_UI_URL } from "@/lib/config";
+import { getRuntimeConfig } from "@/lib/config";
 import { discoverBoardForDid } from "@/lib/board-discovery";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
+  const { uiPublicUrl } = getRuntimeConfig();
   try {
     const { session } = await (await getOAuthClient()).callback(
       request.nextUrl.searchParams,
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     const previousToken = request.cookies.get(WEB_SESSION_COOKIE_NAME)?.value;
     if (previousToken) await deleteWebSession(previousToken);
     const token = await createWebSession(session.did);
-    const response = NextResponse.redirect(APP_UI_URL);
+    const response = NextResponse.redirect(uiPublicUrl);
     response.cookies.set(
       WEB_SESSION_COOKIE_NAME,
       token,
@@ -35,6 +36,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error(error);
-    return NextResponse.redirect(`${APP_UI_URL}/?error=login`);
+    return NextResponse.redirect(`${uiPublicUrl}/?error=login`);
   }
 }

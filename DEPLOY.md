@@ -45,20 +45,14 @@ checkout.
 3. Add a persistent volume mounted at `/data`.
 4. Add `bulletin.dholms.at` as the custom domain, set its target port to
    **3000**, and create the DNS record Railway shows you. Port 3001 is only
-   used internally by the sync sidecar.
-5. Add these Railway variables:
+   used by the loopback sync listener inside the same application process.
+5. `env/production.env` provides the public URLs, DIDs, production
+   resolvers, loopback sync URL, and `/data/bulletin.db` database path. Add
+   Railway variables only when overriding those defaults. The available names
+   are documented in `.env.example`; for example:
 
 ```text
-APP_URL=https://bulletin.dholms.at
-APP_UI_URL=https://bulletin.dholms.at
 DATABASE_PATH=/data/bulletin.db
-PLC_URL=https://plc.directory
-HANDLE_RESOLVER_URL=https://public.api.bsky.app
-BSKY_URL=https://public.api.bsky.app
-MANAGING_APP_DID=did:web:bulletin.dholms.at
-SYNC_URL=http://127.0.0.1:3001
-SYNC_PUBLIC_URL=https://bulletin.dholms.at/sync
-SYNC_SERVICE_DID=did:web:bulletin.dholms.at
 ```
 
 Keep the service at **one replica** because the app and sync worker share one

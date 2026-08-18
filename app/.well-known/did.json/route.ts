@@ -1,31 +1,25 @@
-import {
-  APP_URL,
-  MANAGING_APP_DID,
-  MANAGING_APP_SERVICE,
-  SYNC_PUBLIC_URL,
-  SYNC_SERVICE,
-  SYNC_SERVICE_DID,
-} from "@/lib/config";
+import { getRuntimeConfig } from "@/lib/config";
 import { NextResponse } from "next/server";
 
 export function GET() {
+  const config = getRuntimeConfig();
   const services = [
     {
-      id: MANAGING_APP_SERVICE,
+      id: config.managingAppService,
       type: "AtprotoSpaceService",
-      serviceEndpoint: APP_URL,
+      serviceEndpoint: config.managingAppPublicUrl,
     },
   ];
-  if (SYNC_SERVICE_DID === MANAGING_APP_DID) {
+  if (config.syncServiceDid === config.managingAppDid) {
     services.push({
-      id: SYNC_SERVICE,
+      id: config.syncService,
       type: "AtprotoSpaceSyncService",
-      serviceEndpoint: SYNC_PUBLIC_URL,
+      serviceEndpoint: config.syncPublicUrl,
     });
   }
   return NextResponse.json({
     "@context": ["https://www.w3.org/ns/did/v1"],
-    id: MANAGING_APP_DID,
+    id: config.managingAppDid,
     service: services,
   });
 }

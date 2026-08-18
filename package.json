@@ -4,19 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx scripts/dev-atmosphere.ts",
-    "dev:local": "pnpm migrate && pnpm publish-lexicons && next dev --webpack --hostname 0.0.0.0",
+    "dev": "node --import tsx scripts/run.ts --profile dev",
+    "dev:local": "node --import tsx scripts/run.ts --profile local",
     "build": "pnpm codegen:lex && next build --webpack",
-    "start": "pnpm migrate && next start --hostname 0.0.0.0",
-    "railway:start": "pnpm migrate && node --import tsx scripts/start-all.ts",
-    "sync": "pnpm migrate && node --import tsx scripts/sync.ts",
+    "start": "node --import tsx scripts/run.ts --profile production",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "migrate": "node --import tsx scripts/migrate.ts",
     "publish-lexicons": "node --import tsx scripts/publish-lexicons.ts",
     "codegen:lex": "node scripts/codegen-lex.mjs",
-    "test": "node --import tsx --test lib/**/*.test.ts"
+    "test": "node --import tsx --test lib/*.test.ts lib/**/*.test.ts"
   },
   "dependencies": {
     "@atproto/common-web": "alpha",

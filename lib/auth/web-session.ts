@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { APP_UI_URL } from "../config";
+import { getRuntimeConfig } from "../config";
 import { getQueryDb } from "../db";
 
 export const WEB_SESSION_COOKIE_NAME = "bulletin-session";
@@ -75,7 +75,7 @@ export function webSessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: new URL(APP_UI_URL).protocol === "https:",
+    secure: new URL(getRuntimeConfig().uiPublicUrl).protocol === "https:",
     path: "/",
     maxAge: WEB_SESSION_MAX_AGE_SECONDS,
   };

@@ -8,15 +8,10 @@ import {
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { parseCid } from "@atproto/lex-data";
-import { DATABASE_PATH } from "./db/index";
-
-export const BLOB_DIRECTORY = path.resolve(
-  process.env.BLOB_DIRECTORY ??
-    path.join(path.dirname(path.resolve(DATABASE_PATH)), "bulletin-blobs"),
-);
+import { getRuntimeConfig } from "./config";
 
 export function storeBlobFile(cid: string, bytes: Uint8Array): void {
-  mkdirSync(BLOB_DIRECTORY, { recursive: true });
+  mkdirSync(getBlobDirectory(), { recursive: true });
   const target = blobPath(cid);
   const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
   try {
@@ -50,7 +45,15 @@ export function deleteBlobFile(cid: string): void {
 
 function blobPath(cid: string): string {
   const canonical = parseCid(cid).toString();
-  return path.join(BLOB_DIRECTORY, canonical);
+  return path.join(getBlobDirectory(), canonical);
+}
+
+function getBlobDirectory(): string {
+  const { blobDirectory, databasePath } = getRuntimeConfig();
+  return path.resolve(
+    blobDirectory ??
+      path.join(path.dirname(path.resolve(databasePath)), "bulletin-blobs"),
+  );
 }
 
 function isMissingFile(error: unknown): boolean {

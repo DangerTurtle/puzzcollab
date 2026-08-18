@@ -1,9 +1,10 @@
 import { buildAtprotoLoopbackClientMetadata } from "@atproto/oauth-client-node";
-import { APP_UI_URL, OAUTH_SCOPE } from "../config";
+import { getRuntimeConfig, OAUTH_SCOPE } from "../config";
 
 export function getClientMetadata() {
-  const appUrl = new URL(APP_UI_URL);
-  const redirectUri = `${APP_UI_URL}/oauth/callback`;
+  const { uiPublicUrl } = getRuntimeConfig();
+  const appUrl = new URL(uiPublicUrl);
+  const redirectUri = `${uiPublicUrl}/oauth/callback`;
   if (appUrl.hostname === "localhost" || appUrl.hostname === "127.0.0.1") {
     return buildAtprotoLoopbackClientMetadata({
       redirect_uris: [redirectUri],
@@ -12,9 +13,9 @@ export function getClientMetadata() {
   }
 
   return {
-    client_id: `${APP_UI_URL}/oauth-client-metadata.json`,
+    client_id: `${uiPublicUrl}/oauth-client-metadata.json`,
     client_name: "Bulletin",
-    client_uri: APP_UI_URL,
+    client_uri: uiPublicUrl,
     redirect_uris: [redirectUri] as [string, ...string[]],
     scope: OAUTH_SCOPE,
     grant_types: ["authorization_code", "refresh_token"] as [

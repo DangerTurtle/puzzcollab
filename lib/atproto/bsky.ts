@@ -1,11 +1,11 @@
 import { Client } from "@atproto/lex-client";
-import { BSKY_URL } from "../config";
+import { getRuntimeConfig } from "../config";
 
 let client: Client | undefined;
 
 export function getBskyClient(): Client {
   client ??= new Client({
-    service: BSKY_URL,
+    service: getRuntimeConfig().bskyUrl,
     fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
   });
   return client;

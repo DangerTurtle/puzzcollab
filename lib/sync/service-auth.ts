@@ -1,5 +1,5 @@
 import { verifyJwt } from "@atproto/xrpc-server";
-import { SYNC_SERVICE } from "../config";
+import { getRuntimeConfig } from "../config";
 import { getIdResolver } from "../atproto/identity";
 
 const NOTIFY_WRITE_LXM = "com.atproto.space.notifyWrite";
@@ -34,7 +34,7 @@ async function verifySpaceNotification(
   if (!authority) throw new Error("Invalid board reference");
   const payload = await verifyJwt(
     token,
-    SYNC_SERVICE,
+    getRuntimeConfig().syncService,
     lxm,
     async (issuer, forceRefresh) => {
       const did = issuer.split("#")[0];

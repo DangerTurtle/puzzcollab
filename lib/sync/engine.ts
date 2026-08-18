@@ -7,11 +7,9 @@ import {
   type SignedCommit,
 } from "@atproto/space";
 import {
-  MANAGING_APP_SERVICE,
   LABEL_COLLECTION,
   POSITION_COLLECTION,
   POST_COLLECTION,
-  SYNC_SERVICE,
   boardUri,
 } from "../config";
 import {
@@ -56,6 +54,10 @@ import {
 type NotifyInput = { space: string; repo: string; rev: string };
 type OnChange = (space: string) => void;
 type SyncedBlob = SpaceBlob & { bytes: Uint8Array };
+type SyncEngineServices = {
+  managingAppService: string;
+  syncService: string;
+};
 
 export class SyncEngine {
   private credentials = new Map<string, SpaceCredential>();
@@ -69,7 +71,10 @@ export class SyncEngine {
     ReturnType<typeof setTimeout>
   >();
 
-  constructor(private readonly onChange: OnChange) {}
+  constructor(
+    private readonly onChange: OnChange,
+    private readonly services: SyncEngineServices,
+  ) {}
 
   async resume(): Promise<void> {
     const generations = new Map(this.spaceGenerations);
@@ -236,7 +241,7 @@ export class SyncEngine {
           com.atproto.space.registerNotify,
           {
             space: asStringFormat(watch.spaceUri, "space-ref"),
-            service: SYNC_SERVICE,
+            service: this.services.syncService,
           },
         );
         registrationExpiresAt = registered.expiresAt;
@@ -298,7 +303,7 @@ export class SyncEngine {
         response.policy.$type !==
           "com.atproto.simplespace.defs#managingAppPolicy" ||
         !("managingApp" in response.policy) ||
-        response.policy.managingApp !== MANAGING_APP_SERVICE
+        response.policy.managingApp !== this.services.managingAppService
       ) {
         throw new InvalidBulletinSpaceError();
       }
@@ -386,7 +391,7 @@ export class SyncEngine {
         com.atproto.space.registerNotify,
         {
           space: asStringFormat(watch.spaceUri, "space-ref"),
-          service: SYNC_SERVICE,
+          service: this.services.syncService,
         },
       );
       if (this.isWatchInactive(watch)) return;

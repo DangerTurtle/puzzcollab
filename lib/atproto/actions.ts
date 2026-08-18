@@ -3,11 +3,11 @@ import { asStringFormat, currentDatetimeString } from "@atproto/lex-schema";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
   LABEL_COLLECTION,
-  MANAGING_APP_SERVICE,
   POSITION_COLLECTION,
   POST_COLLECTION,
   SPACE_TYPE,
   boardUri,
+  getRuntimeConfig,
 } from "../config";
 import {
   deleteStoredPost,
@@ -36,7 +36,7 @@ export async function createBoard(session: OAuthSession): Promise<string> {
     skey: "self",
     policy: {
       $type: "com.atproto.simplespace.defs#managingAppPolicy",
-      managingApp: MANAGING_APP_SERVICE,
+      managingApp: getRuntimeConfig().managingAppService,
     },
     appAccess: {
       $type: "com.atproto.simplespace.defs#open",

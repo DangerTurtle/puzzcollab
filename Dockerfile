@@ -15,4 +15,4 @@ RUN corepack prepare pnpm@8.15.9 --activate \
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-CMD ["pnpm", "railway:start"]
+CMD ["pnpm", "start"]

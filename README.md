@@ -35,8 +35,9 @@ pnpm dev:local
 Open <http://127.0.0.1:3000>. The dev network seeds `alice`, `bob`, and `carol`
 on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
 
-The `dev:local` script migrates SQLite and publishes the `at.dholms.bulletin`
-Lexicons to the test network's Lexicon authority before starting Next.js.
+The `local` profile migrates SQLite, publishes the `at.dholms.bulletin`
+Lexicons to the test network's Lexicon authority, and starts both Next.js and
+the sync service in one Node process.
 On sign-in, Bulletin rediscovers the user's deterministic board. Other boards
 are discovered on demand the first time someone opens them, without scanning
 the viewer's follow list.
@@ -50,15 +51,30 @@ Atmosphere accounts, use:
 pnpm dev
 ```
 
-Open <http://127.0.0.1:3000>. This mode loads `.env.atmosphere`, uses the
-production PLC and handle resolver, and stores state in
-`bulletin-atmosphere.db` so it cannot mix with local-testnet sessions. It does
-not start the multi-PDS network or publish Lexicons. It uses the deployed
+Open <http://127.0.0.1:3000>. The `dev` profile uses the production PLC and
+handle resolver and stores state in `bulletin-dev.db`, so it cannot mix with
+local-testnet sessions. It does not start the multi-PDS network or publish
+Lexicons. It uses the deployed
 `bulletin.dholms.at` managing-app and sync identities, so that production PDSes
 can resolve and call those services even though the development server and its
 database are local. PDS notifications therefore go to the deployed sync
 service; the local sync worker reconciles watched boards every 10 seconds to
 keep its isolated database current.
+
+## Runtime profiles
+
+Bulletin has three profiles, all run by the same application entry point:
+
+| Profile | Command | Purpose |
+| --- | --- | --- |
+| `local` | `pnpm dev:local` | Local multi-PDS testnet |
+| `dev` | `pnpm dev` | Local development against Atmosphere |
+| `production` | `pnpm start` | Built application on Railway |
+
+Shared defaults live in `env/common.env`, with profile values in
+`env/local.env`, `env/dev.env`, and `env/production.env`. Runtime overrides can
+go in `.env`, `.env.local`, or `.env.<profile>.local`; shell and deployment
+variables take precedence. `.env.example` lists the supported settings.
 
 ## Key pieces
 
@@ -68,7 +84,7 @@ keep its isolated database current.
 - `lib/db`: Kysely-backed SQLite state, OAuth storage, posts, and labels
 - `lexicons/at/dholms`: board, post, position, label, and permission declarations
 
-This is intentionally local-first. The app uses a loopback OAuth client and the
-service DID `did:web:localhost%3A3000#bulletin`.
+The `local` profile uses a loopback OAuth client and the service DID
+`did:web:localhost%3A3000#bulletin`.
 
 For production setup and Railway deployment, see [DEPLOY.md](./DEPLOY.md).

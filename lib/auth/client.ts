@@ -6,7 +6,7 @@ import {
 } from "@atproto/oauth-client-node";
 import { sql } from "kysely";
 import { isIP } from "node:net";
-import { APP_UI_URL, PLC_URL } from "../config";
+import { getRuntimeConfig } from "../config";
 import { resolveHandle } from "../atproto/identity";
 import { getQueryDb } from "../db";
 import { getClientMetadata } from "./metadata";
@@ -15,11 +15,12 @@ let oauthClient: NodeOAuthClient | undefined;
 
 export async function getOAuthClient(): Promise<NodeOAuthClient> {
   if (oauthClient) return oauthClient;
+  const config = getRuntimeConfig();
 
   oauthClient = new NodeOAuthClient({
     clientMetadata: getClientMetadata(),
-    allowHttp: isLoopbackApp(),
-    plcDirectoryUrl: PLC_URL,
+    allowHttp: isLoopbackApp(config.uiPublicUrl),
+    plcDirectoryUrl: config.plcUrl,
     handleResolver: {
       async resolve(handle) {
         return (await resolveHandle(handle)) as AtprotoDid | null;
@@ -32,8 +33,8 @@ export async function getOAuthClient(): Promise<NodeOAuthClient> {
   return oauthClient;
 }
 
-function isLoopbackApp(): boolean {
-  const hostname = new URL(APP_UI_URL).hostname;
+function isLoopbackApp(uiPublicUrl: string): boolean {
+  const hostname = new URL(uiPublicUrl).hostname;
   const unwrapped = hostname.replace(/^\[|\]$/g, "");
   return (
     hostname === "localhost" ||

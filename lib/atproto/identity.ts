@@ -1,17 +1,12 @@
 import { getPdsEndpoint } from "@atproto/common-web";
 import { IdResolver } from "@atproto/identity";
-import {
-  DEV_INTROSPECT_URL,
-  DEV_PDS_URL,
-  HANDLE_RESOLVER_URL,
-  PLC_URL,
-} from "../config";
+import { getRuntimeConfig } from "../config";
 import { getAccount, saveAccount } from "../db/queries";
 
 let resolver: IdResolver | undefined;
 
 export function getIdResolver(): IdResolver {
-  resolver ??= new IdResolver({ plcUrl: PLC_URL });
+  resolver ??= new IdResolver({ plcUrl: getRuntimeConfig().plcUrl });
   return resolver;
 }
 
@@ -43,8 +38,9 @@ export async function resolveIdentifier(identifier: string): Promise<string> {
 }
 
 export async function resolveHandle(handle: string): Promise<string | null> {
-  if (HANDLE_RESOLVER_URL) {
-    return resolveHandleAt(HANDLE_RESOLVER_URL, handle);
+  const { handleResolverUrl } = getRuntimeConfig();
+  if (handleResolverUrl) {
+    return resolveHandleAt(handleResolverUrl, handle);
   }
   const pdsUrls = await getDevPdsUrls(handle);
   for (const pdsUrl of pdsUrls) {
@@ -67,8 +63,9 @@ async function resolveHandleAt(service: string, handle: string): Promise<string 
 }
 
 async function getDevPdsUrls(handle: string): Promise<string[]> {
+  const { devIntrospectUrl, devPdsUrl } = getRuntimeConfig();
   try {
-    const response = await fetch(DEV_INTROSPECT_URL);
+    const response = await fetch(devIntrospectUrl);
     if (!response.ok) throw new Error(`Introspection failed (${response.status})`);
     const body = (await response.json()) as {
       pdses?: Array<{ url: string; handleDomains?: string[] }>;
@@ -80,7 +77,7 @@ async function getDevPdsUrls(handle: string): Promise<string[]> {
   } catch {
     // Fall back to the primary PDS when the dev introspection server is absent.
   }
-  return [DEV_PDS_URL];
+  return [devPdsUrl];
 }
 
 export async function cacheIdentity(did: string): Promise<void> {
