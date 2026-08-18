@@ -46,12 +46,14 @@ export function LoginForm() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const normalizedHandle = handle.trim();
+    if (!normalizedHandle || busy) return;
     setBusy(true);
     setError(undefined);
     const response = await fetch("/oauth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ handle }),
+      body: JSON.stringify({ handle: normalizedHandle }),
     });
     const body = (await response.json()) as { redirectUrl?: string; error?: string };
     if (!response.ok || !body.redirectUrl) {
@@ -121,7 +123,11 @@ export function LoginForm() {
         )}
       </div>
       {error && <div className="error">{error}</div>}
-      <button className="button" disabled={busy || !handle.trim()}>
+      <button
+        className="button"
+        disabled={busy || !handle.trim()}
+        aria-busy={busy}
+      >
         {busy ? "Signing you in…" : "Login with Atmosphere"}
       </button>
     </form>

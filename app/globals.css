@@ -70,7 +70,8 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: inherit; }
   padding: 9px 13px; cursor: pointer; font-size: 12px;
 }
 .board-search-button:hover { background: var(--red); }
-.board-search-button:disabled { opacity: .5; cursor: wait; }
+.board-search-button:disabled { opacity: .5; cursor: not-allowed; }
+.board-search-button[aria-busy="true"] { cursor: wait; }
 .board-search-error {
   position: absolute; z-index: 10; top: calc(100% + 7px); left: 0; right: 0;
   border: 1px solid var(--red); background: #fff4ef; color: var(--red);
@@ -191,7 +192,8 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
   padding: 12px 16px; cursor: pointer; text-decoration: none;
 }
 .button:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--red); }
-.button:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
+.button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.button[aria-busy="true"] { cursor: wait; }
 .error { color: var(--red); font-size: 13px; line-height: 1.4; }
 
 .board-page { min-height: 100svh; }

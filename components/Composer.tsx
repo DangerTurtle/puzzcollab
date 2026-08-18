@@ -146,7 +146,11 @@ export function Composer({
         )}
       </div>
       {error && <div className="error">{error}</div>}
-      <button className="button" disabled={busy || (!text.trim() && !image)}>
+      <button
+        className="button"
+        disabled={busy || (!text.trim() && !image)}
+        aria-busy={busy}
+      >
         {busy ? "pinning…" : "pin note"}
       </button>
     </form>

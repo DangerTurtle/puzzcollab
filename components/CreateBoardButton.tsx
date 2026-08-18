@@ -10,6 +10,7 @@ export function CreateBoardButton() {
       <button
         className="button"
         disabled={busy}
+        aria-busy={busy}
         onClick={async () => {
           setBusy(true);
           setError(undefined);

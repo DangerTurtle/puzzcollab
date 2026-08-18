@@ -44,12 +44,14 @@ export function BoardFinder() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier || busy) return;
     setSearchFocused(false);
     clearSuggestions();
     setBusy(true);
     setError(undefined);
     const url = new URL("/api/resolve", window.location.origin);
-    url.searchParams.set("identifier", identifier);
+    url.searchParams.set("identifier", normalizedIdentifier);
     const response = await fetch(url);
     const body = (await response.json()) as { handle?: string; error?: string };
     if (!response.ok || !body.handle) {
@@ -118,6 +120,7 @@ export function BoardFinder() {
       <button
         className="board-search-button"
         disabled={busy || !identifier.trim()}
+        aria-busy={busy}
         aria-label="Open board"
       >
         {busy ? "…" : "go"}

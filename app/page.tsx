@@ -29,7 +29,7 @@ export default async function Home() {
             everyone gets their own board
           </li>
           <li className="home-feature-note home-feature-note-read">
-            your followers can read
+            only your followers can read
           </li>
           <li className="home-feature-note home-feature-note-write">
             mutuals can leave a note
