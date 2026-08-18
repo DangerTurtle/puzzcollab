@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.formData();
     const ownerDid = stringValue(body.get("ownerDid"));
-    const text = stringValue(body.get("text"))?.trim();
+    const text = stringValue(body.get("text"))?.trim() ?? "";
     const color = stringValue(body.get("color"));
     const rotation = numberValue(body.get("rotation"));
     const x = numberValue(body.get("x"));
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const imageAlt = stringValue(body.get("imageAlt"))?.trim() ?? "";
     if (
       !ownerDid?.startsWith("did:") ||
-      !text ||
+      (!text && image === null) ||
       Array.from(text).length > MAX_NOTE_TEXT_LENGTH ||
       !isNoteColor(color) ||
       !isNoteRotation(rotation) ||
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
           Array.from(imageAlt).length > MAX_NOTE_IMAGE_ALT_LENGTH))
     ) {
       return NextResponse.json(
-        { error: "Enter a valid note and an optional image up to 500 KB" },
+        { error: "Enter note text or add an image up to 500 KB" },
         { status: 400 },
       );
     }

@@ -183,10 +183,11 @@ export function SpatialBoard({
         ) : (
           posts.map((post) => {
             const movable = canMove(post);
+            const imageOnly = Boolean(post.imageCid && !post.text);
             const author = post.authorHandle ? `@${post.authorHandle}` : "Someone";
             return (
               <article
-                className={`note spatial-note color-${post.color} ${movable ? "movable" : ""} ${activeUri === post.uri ? "dragging" : ""}`}
+                className={`note spatial-note color-${post.color} ${imageOnly ? "image-only" : ""} ${movable ? "movable" : ""} ${activeUri === post.uri ? "dragging" : ""}`}
                 key={post.uri}
                 style={{
                   left: `${(post.x / BOARD_COORDINATE_MAX) * 100}%`,
@@ -208,7 +209,7 @@ export function SpatialBoard({
                     draggable={false}
                   />
                 )}
-                <div className="note-text">{post.text}</div>
+                {post.text && <div className="note-text">{post.text}</div>}
                 {post.hidden && (
                   <div className="note-visibility">Removed from board</div>
                 )}

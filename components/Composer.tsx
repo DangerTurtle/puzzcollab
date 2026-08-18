@@ -69,7 +69,7 @@ export function Composer({
 
   return (
     <form
-      className={`note stack board-composer-card color-${color}`}
+      className="stack board-composer-card"
       onSubmit={submit}
       role="dialog"
       aria-label="Pin a note here"
@@ -146,7 +146,7 @@ export function Composer({
         )}
       </div>
       {error && <div className="error">{error}</div>}
-      <button className="button" disabled={busy || !text.trim()}>
+      <button className="button" disabled={busy || (!text.trim() && !image)}>
         {busy ? "pinning…" : "pin note"}
       </button>
     </form>

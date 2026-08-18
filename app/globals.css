@@ -273,7 +273,10 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
 .board-composer {
   position: absolute; z-index: 100; width: min(300px, calc(100% - 24px)); cursor: default;
 }
-.board-composer-card { padding: 26px 20px 20px; box-shadow: 8px 10px 28px rgba(48, 32, 15, .28); }
+.board-composer-card {
+  border: 1px solid var(--line); background: var(--card); padding: 26px 20px 20px;
+  box-shadow: 8px 10px 28px rgba(48, 32, 15, .28);
+}
 .board-composer-card h2 {
   margin: 0; font-family: "Klee", "Noteworthy", "Avenir Next", sans-serif; font-size: 23px; font-weight: 600;
 }
@@ -298,6 +301,8 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
   display: block; width: auto; height: auto; max-width: 100%; max-height: 120px; margin: 0 auto 9px;
   border-radius: 2px; object-fit: contain; background: rgba(255,255,255,.28);
 }
+.spatial-note.image-only { padding-bottom: 34px; }
+.spatial-note.image-only .note-image { margin-bottom: 0; }
 .spatial-note:hover { z-index: 10; }
 .spatial-note.movable { cursor: grab; touch-action: none; }
 .spatial-note.dragging { cursor: grabbing; z-index: 50; box-shadow: 9px 12px 22px rgba(48, 32, 15, .24); }
