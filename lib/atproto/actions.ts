@@ -1,5 +1,5 @@
 import { Client } from "@atproto/lex-client";
-import { asStringFormat, currentDatetimeString } from "@atproto/lex-schema";
+import { asStringFormat } from "@atproto/lex-schema";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
   LABEL_COLLECTION,
@@ -19,7 +19,7 @@ import {
   upsertPost,
   upsertPosition,
 } from "../db/queries";
-import { getRelationship, userFollows } from "./follows";
+import { getRelationship } from "./follows";
 import type { NoteColor } from "../note-style";
 import { noteImageBlobRef, parseNoteImage, type NoteImage } from "../note-image";
 import {
@@ -27,7 +27,7 @@ import {
   MAX_NOTE_IMAGE_BYTES,
 } from "../note-constraints";
 import { storeBlobFile } from "../blob-store";
-import { app, com } from "../lexicons";
+import { com } from "../lexicons";
 
 export async function createBoard(session: OAuthSession): Promise<string> {
   const client = new Client(session);
@@ -44,22 +44,6 @@ export async function createBoard(session: OAuthSession): Promise<string> {
   });
   await saveBoard(result.uri, session.did);
   return result.uri;
-}
-
-export async function followOwner(
-  session: OAuthSession,
-  ownerDid: string,
-): Promise<void> {
-  if (await userFollows(session.did, ownerDid)) return;
-  const client = new Client(session);
-  await client.create(
-    app.bsky.graph.follow,
-    {
-      subject: asStringFormat(ownerDid, "did"),
-      createdAt: currentDatetimeString(),
-    },
-    { repo: session.did },
-  );
 }
 
 export async function createPost(

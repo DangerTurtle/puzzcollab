@@ -11,11 +11,11 @@ export async function Header({ did }: { did?: string | null }) {
   return (
     <header className="topbar">
       <Link className="brand" href="/">
-        <span className="brand-mark">●</span> BULLETIN
+        bulletin
       </Link>
       {did && (
         <div className="topbar-actions">
-          <BoardFinder knownBoards={knownBoards} compact />
+          <BoardFinder knownBoards={knownBoards} />
           <div className="session">
             <Link
               className="session-user"

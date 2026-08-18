@@ -1,10 +1,9 @@
 import { CreateBoardButton } from "@/components/CreateBoardButton";
-import { FollowGate } from "@/components/FollowGate";
 import { Header } from "@/components/Header";
 import { LoginForm } from "@/components/LoginForm";
 import { SpatialBoard } from "@/components/SpatialBoard";
 import { getRelationship, type Relationship } from "@/lib/atproto/follows";
-import { getProfile } from "@/lib/atproto/profile";
+import { getProfile, type Profile } from "@/lib/atproto/profile";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
 import { getSession } from "@/lib/auth/session";
 import { discoverBoardForDid } from "@/lib/board-discovery";
@@ -38,9 +37,11 @@ export default async function BoardPage({
     return (
       <main className="shell">
         <Header />
-        <div className="card gate">
-          <h2>Sign in to view this board</h2>
-          <p>Boards are shared with the people who follow their owner.</p>
+        <div className="gate">
+          <div className="gate-sticker">followers only</div>
+          <h1 className="gate-title">
+            sign in to open <span>this bulletin</span>
+          </h1>
           <LoginForm />
         </div>
       </main>
@@ -57,22 +58,36 @@ export default async function BoardPage({
         <BoardUnavailable
           viewerDid={session.did}
           ownerHandle={owner?.handle}
+          avatar={null}
         />
       );
     }
     if (!relationship.follows) {
+      const restrictedProfile = await getProfile(ownerDid);
+      const restrictedHandle = restrictedProfile?.handle ?? owner?.handle;
       return (
-        <main className="shell">
+        <main className="shell board-page">
           <Header did={session.did} />
           <section className="board-head">
-            <div className="eyebrow">Followers-only board</div>
-            <h1>{owner?.handle ? `@${owner.handle}` : "Someone’s board"}</h1>
+            <BoardTitle
+              ownerHandle={restrictedHandle}
+              avatar={restrictedProfile?.avatar}
+            />
           </section>
-          <FollowGate ownerDid={ownerDid} ownerHandle={owner?.handle} />
+          <div className="board-layout">
+            <div className="spatial-board-wrap">
+              <div className="spatial-board" aria-label="Followers-only board">
+                <div className="note restricted-board-note">followers only</div>
+              </div>
+            </div>
+          </div>
         </main>
       );
     }
   }
+
+  const ownerProfile = await getProfile(ownerDid);
+  const ownerHandle = ownerProfile?.handle ?? owner?.handle;
 
   let boardExists = await hasBoard(ownerDid);
   if (!boardExists || !(await hasSpaceWatch(space))) {
@@ -87,7 +102,8 @@ export default async function BoardPage({
         return (
           <BoardUnavailable
             viewerDid={session.did}
-            ownerHandle={owner?.handle}
+            ownerHandle={ownerHandle}
+            avatar={ownerProfile?.avatar}
           />
         );
       }
@@ -99,9 +115,11 @@ export default async function BoardPage({
       return (
         <main className="shell">
           <Header did={session.did} />
-          <div className="card gate stack">
-            <h2>Your board isn’t up yet</h2>
-            <p>Put up your board and start collecting notes.</p>
+          <div className="gate stack">
+            <h1 className="gate-title">
+              put up your <span>bulletin</span>
+            </h1>
+            <p>start with an empty board and make it yours</p>
             <CreateBoardButton />
           </div>
         </main>
@@ -110,11 +128,11 @@ export default async function BoardPage({
     return (
       <main className="shell">
         <Header did={session.did} />
-        <div className="card gate stack">
-          <h2>No board here yet</h2>
+        <div className="gate stack">
+          <h1 className="gate-title">nothing pinned here yet</h1>
           <p>
-            {owner?.handle ? `@${owner.handle}` : "This person"} has not created
-            a board yet.
+            {ownerHandle ? `@${ownerHandle}` : "this person"} hasn’t put up a
+            bulletin
           </p>
         </div>
       </main>
@@ -122,33 +140,27 @@ export default async function BoardPage({
   }
 
   const posts = await listBoardPosts(space, ownerDid);
-  const visiblePosts = posts.filter((post) => !post.hidden);
   const displayedPosts = posts.filter(
     (post) => !post.hidden || post.authorDid === session.did,
   );
   const profileEntries = await Promise.all(
-    [...new Set(displayedPosts.map((post) => post.authorDid))].map(
-      async (did) => [did, await getProfile(did)] as const,
-    ),
+    [...new Set(displayedPosts.map((post) => post.authorDid))]
+      .filter((did) => did !== ownerDid)
+      .map(
+        async (did) => [did, await getProfile(did)] as const,
+      ),
   );
-  const profiles = new Map(profileEntries);
+  const profiles = new Map<string, Profile | null>([
+    [ownerDid, ownerProfile],
+    ...profileEntries,
+  ]);
   const canWrite = ownBoard || Boolean(relationship?.followedBy);
 
   return (
-    <main className="shell">
+    <main className="shell board-page">
       <Header did={session.did} />
       <section className="board-head">
-        <div className="eyebrow">Bulletin board</div>
-        <h1>{owner?.handle ? `@${owner.handle}` : "Your board"}</h1>
-        <div className="board-meta">
-          <span>
-            {visiblePosts.length} {visiblePosts.length === 1 ? "note" : "notes"}
-          </span>
-          <span>·</span>
-          <span>Followers only</span>
-          <span>·</span>
-          <span>{canWrite ? "You can post" : "Reading only"}</span>
-        </div>
+        <BoardTitle ownerHandle={ownerHandle} avatar={ownerProfile?.avatar} />
       </section>
       <div className="board-layout">
         <SpatialBoard
@@ -177,20 +189,22 @@ export default async function BoardPage({
 function BoardUnavailable({
   viewerDid,
   ownerHandle,
+  avatar,
 }: {
   viewerDid: string;
   ownerHandle: string | null | undefined;
+  avatar: string | null | undefined;
 }) {
   return (
     <main className="shell">
       <Header did={viewerDid} />
       <section className="board-head">
-        <div className="eyebrow">Followers-only board</div>
-        <h1>{ownerHandle ? `@${ownerHandle}` : "Someone’s board"}</h1>
+        <BoardTitle ownerHandle={ownerHandle} avatar={avatar} />
       </section>
-      <div className="card gate">
-        <h2>The board couldn’t be opened</h2>
-        <p>Something went wrong. Give it a moment and try again.</p>
+      <div className="gate">
+        <div className="gate-sticker">give it a minute</div>
+        <h1 className="gate-title">this bulletin couldn’t be opened</h1>
+        <p>something went wrong — try again in a moment</p>
       </div>
     </main>
   );
@@ -200,11 +214,32 @@ function BoardNotFound({ viewerDid }: { viewerDid?: string }) {
   return (
     <main className="shell">
       <Header did={viewerDid} />
-      <div className="card gate">
-        <h2>Board not found</h2>
-        <p>Check the handle and try again.</p>
+      <div className="gate">
+        <h1 className="gate-title">no bulletin here</h1>
+        <p>check the handle and try again</p>
       </div>
     </main>
+  );
+}
+
+function BoardTitle({
+  ownerHandle,
+  avatar,
+}: {
+  ownerHandle: string | null | undefined;
+  avatar?: string | null;
+}) {
+  return (
+    <div className="board-identity">
+      {avatar && (
+        // Profile blobs can come from arbitrary PDS hosts.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="board-avatar" src={avatar} alt="" />
+      )}
+      <h1 className="board-title">
+        {ownerHandle ? `@${ownerHandle}` : "bulletin"}
+      </h1>
+    </div>
   );
 }
 

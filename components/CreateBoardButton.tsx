@@ -23,7 +23,7 @@ export function CreateBoardButton() {
           window.location.reload();
         }}
       >
-        {busy ? "Pinning it up…" : "Create my board"}
+        {busy ? "putting it up…" : "create my bulletin"}
       </button>
       {error && <div className="error">{error}</div>}
     </div>

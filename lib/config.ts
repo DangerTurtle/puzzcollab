@@ -7,7 +7,6 @@ export const BOARD_SKEY = "self";
 
 export const OAUTH_SCOPE = [
   "atproto",
-  "repo:app.bsky.graph.follow",
   "blob?accept=image/jpeg&accept=image/png&accept=image/webp",
   `include:${BULLETIN_PERMISSION_SET}`,
 ].join(" ");

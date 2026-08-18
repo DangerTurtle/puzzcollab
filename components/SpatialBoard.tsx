@@ -170,10 +170,6 @@ export function SpatialBoard({
 
   return (
     <div className="spatial-board-wrap">
-      <div className="board-instructions">
-        {canWrite && "Click an empty spot to pin a note. "}
-        Drag {viewerDid === ownerDid ? "any note" : "your notes"} to rearrange the board.
-      </div>
       {error && <div className="error">{error}</div>}
       <div
         className={`spatial-board ${canWrite ? "can-compose" : ""}`}
@@ -181,7 +177,9 @@ export function SpatialBoard({
         onPointerDown={openComposer}
       >
         {posts.length === 0 ? (
-          <div className="empty board-empty">The corkboard is bare. Pin the first note.</div>
+          <div className="empty board-empty">
+            {canWrite ? "nothing here yet — pin the first note" : "nothing pinned here yet"}
+          </div>
         ) : (
           posts.map((post) => {
             const movable = canMove(post);

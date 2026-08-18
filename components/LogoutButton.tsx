@@ -3,13 +3,13 @@
 export function LogoutButton() {
   return (
     <button
-      className="button secondary small"
+      className="text-button"
       onClick={async () => {
         await fetch("/oauth/logout", { method: "POST" });
         window.location.href = "/";
       }}
     >
-      Sign out
+      sign out
     </button>
   );
 }

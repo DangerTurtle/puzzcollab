@@ -14,7 +14,6 @@ const lexicons = [
   "com.atproto.space.listRepoOps",
   "com.atproto.space.getBlob",
   "com.atproto.repo.uploadBlob",
-  "app.bsky.graph.follow",
   "app.bsky.graph.getRelationships",
   "app.bsky.actor.getProfile",
   "app.bsky.actor.searchActorsTypeahead",

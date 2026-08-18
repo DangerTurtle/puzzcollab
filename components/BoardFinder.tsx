@@ -6,14 +6,10 @@ type KnownBoard = { ownerDid: string; handle: string | null };
 
 export function BoardFinder({
   knownBoards,
-  compact = false,
 }: {
   knownBoards: KnownBoard[];
-  compact?: boolean;
 }) {
-  const [identifier, setIdentifier] = useState(
-    knownBoards.find((board) => board.handle)?.handle ?? "",
-  );
+  const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -34,15 +30,21 @@ export function BoardFinder({
   }
 
   return (
-    <form className={compact ? "board-search" : "stack"} onSubmit={submit}>
-      <input
-        className={compact ? "board-search-input" : "field"}
-        value={identifier}
-        onChange={(event) => setIdentifier(event.target.value)}
-        placeholder="Find a board…"
-        aria-label="Board owner handle"
-        list="known-boards"
-      />
+    <form className="board-search" onSubmit={submit}>
+      <div className="board-search-field">
+        <span aria-hidden="true">@</span>
+        <input
+          className="board-search-input"
+          value={identifier}
+          onChange={(event) => setIdentifier(event.target.value.replace(/^@+/, ""))}
+          placeholder="find someone"
+          aria-label="Board owner handle"
+          list="known-boards"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      </div>
       <datalist id="known-boards">
         {knownBoards
           .filter((board) => board.handle)
@@ -50,18 +52,13 @@ export function BoardFinder({
             <option key={board.ownerDid} value={board.handle ?? ""} />
           ))}
       </datalist>
-      {!compact && knownBoards.some((board) => board.handle) && (
-        <p className="fineprint">
-          Available now: {knownBoards.filter((board) => board.handle).map((board) => `@${board.handle}`).join(", ")}
-        </p>
-      )}
-      {error && <div className={compact ? "board-search-error" : "error"}>{error}</div>}
+      {error && <div className="board-search-error">{error}</div>}
       <button
-        className={compact ? "board-search-button" : "button secondary"}
+        className="board-search-button"
         disabled={busy || !identifier.trim()}
         aria-label="Open board"
       >
-        {busy ? "…" : compact ? "Open" : "Find their board →"}
+        {busy ? "…" : "go"}
       </button>
     </form>
   );

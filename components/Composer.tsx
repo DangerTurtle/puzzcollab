@@ -69,13 +69,13 @@ export function Composer({
 
   return (
     <form
-      className="card stack board-composer-card"
+      className={`note stack board-composer-card color-${color}`}
       onSubmit={submit}
       role="dialog"
       aria-label="Pin a note here"
     >
       <div className="composer-head">
-        <h2>Pin a note</h2>
+        <h2>leave a note</h2>
         <button
           className="composer-close"
           type="button"
@@ -90,7 +90,7 @@ export function Composer({
         value={text}
         maxLength={MAX_NOTE_TEXT_LENGTH}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Leave something for the board…"
+        placeholder="write something…"
         autoFocus
       />
       <div className="composer-tools">
@@ -114,7 +114,7 @@ export function Composer({
       </div>
       <div className="composer-image-fields">
         <label className="composer-image-picker">
-          <span>{image ? "Change image" : "Add an image"}</span>
+          <span>{image ? "change image" : "add an image"}</span>
           <input
             type="file"
             accept={NOTE_IMAGE_MIME_TYPES.join(",")}
@@ -139,7 +139,7 @@ export function Composer({
               value={imageAlt}
               maxLength={MAX_NOTE_IMAGE_ALT_LENGTH}
               onChange={(event) => setImageAlt(event.target.value)}
-              placeholder="Describe the image (optional)"
+              placeholder="describe the image (optional)"
               aria-label="Image description"
             />
           </>
@@ -147,7 +147,7 @@ export function Composer({
       </div>
       {error && <div className="error">{error}</div>}
       <button className="button" disabled={busy || !text.trim()}>
-        {busy ? "Pinning…" : "Pin it"}
+        {busy ? "pinning…" : "pin note"}
       </button>
     </form>
   );
