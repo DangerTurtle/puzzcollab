@@ -1,5 +1,6 @@
 import { createPost, deleteOwnPost } from "@/lib/atproto/actions";
 import { requireSession } from "@/lib/auth/session";
+import { getBulletinCapabilities } from "@/lib/auth/bulletin-capabilities";
 import { NextRequest, NextResponse } from "next/server";
 import { isNoteColor, isNoteRotation } from "@/lib/note-style";
 import {
@@ -43,8 +44,16 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const session = await requireSession();
+    const capabilities = await getBulletinCapabilities(session, ownerDid);
+    if (!capabilities.canCreateNote) {
+      return NextResponse.json(
+        { error: "Your PDS does not support permissioned data yet" },
+        { status: 403 },
+      );
+    }
     const uri = await createPost(
-      await requireSession(),
+      session,
       ownerDid,
       text,
       { color, rotation, x, y },

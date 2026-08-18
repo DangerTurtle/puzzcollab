@@ -7,6 +7,10 @@ import { getProfile, type Profile } from "@/lib/atproto/profile";
 import { probeSpaceExists } from "@/lib/atproto/space-existence";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
 import { getSession } from "@/lib/auth/session";
+import {
+  getBulletinCapabilities,
+  type BulletinCapabilities,
+} from "@/lib/auth/bulletin-capabilities";
 import { discoverBoardForDid } from "@/lib/board-discovery";
 import { boardUri } from "@/lib/config";
 import {
@@ -47,6 +51,13 @@ export default async function BoardPage({
         </div>
       </main>
     );
+  }
+
+  let capabilities: BulletinCapabilities | undefined;
+  try {
+    capabilities = await getBulletinCapabilities(session, ownerDid);
+  } catch (error) {
+    console.error("Could not read the granted OAuth permissions", error);
   }
 
   let relationship: Relationship | undefined;
@@ -115,6 +126,9 @@ export default async function BoardPage({
   const ownerHandle = ownerProfile?.handle ?? owner?.handle;
 
   let boardExists = await hasBoard(ownerDid);
+  if (ownBoard && !boardExists && capabilities?.canCreateBoard === false) {
+    return <IncompatiblePds viewerDid={session.did} />;
+  }
   if (!boardExists || !(await hasSpaceWatch(space))) {
     try {
       boardExists = await discoverBoardForDid(ownerDid);
@@ -174,7 +188,9 @@ export default async function BoardPage({
     [ownerDid, ownerProfile],
     ...profileEntries,
   ]);
-  const canWrite = ownBoard || Boolean(relationship?.followedBy);
+  const canWrite =
+    capabilities?.canCreateNote === true &&
+    (ownBoard || Boolean(relationship?.followedBy));
 
   return (
     <main className="shell board-page">
@@ -201,6 +217,24 @@ export default async function BoardPage({
           viewerDid={session.did}
           canWrite={canWrite}
         />
+      </div>
+    </main>
+  );
+}
+
+function IncompatiblePds({ viewerDid }: { viewerDid: string }) {
+  return (
+    <main className="shell">
+      <Header did={viewerDid} />
+      <div className="gate">
+        <div className="gate-sticker">pds upgrade needed</div>
+        <h1 className="gate-title">
+          your PDS isn’t ready for <span>bulletins</span>
+        </h1>
+        <p>
+          you’ll need to move to a PDS that supports permissioned data before
+          you can create a bulletin
+        </p>
       </div>
     </main>
   );

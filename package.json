@@ -24,6 +24,7 @@
     "@atproto/lex-data": "^0.1.7",
     "@atproto/lex-schema": "alpha",
     "@atproto/oauth-client-node": "alpha",
+    "@atproto/oauth-scopes": "0.0.0-spaces-alpha-20260818163953",
     "@atproto/space": "alpha",
     "@atproto/syntax": "alpha",
     "@atproto/xrpc-server": "alpha",
