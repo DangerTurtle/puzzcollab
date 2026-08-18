@@ -68,15 +68,35 @@ a { color: inherit; }
   padding: 8px 10px; font-size: 11px; line-height: 1.35; box-shadow: var(--shadow);
 }
 
-.hero { padding: 80px 0 44px; max-width: 760px; }
 .eyebrow { color: var(--red); text-transform: uppercase; font-weight: 800; letter-spacing: .12em; font-size: 12px; }
 h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 8vw, 88px); line-height: .92; letter-spacing: -.055em; margin: 18px 0 24px; }
-.lede { font-family: Georgia, "Times New Roman", serif; font-size: clamp(20px, 3vw, 28px); line-height: 1.35; color: #4e493e; max-width: 670px; }
-
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding-bottom: 80px; }
 .card { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); padding: 26px; }
 .card h2 { font-family: Georgia, "Times New Roman", serif; font-size: 28px; margin: 0 0 10px; }
 .card p { color: var(--muted); line-height: 1.6; font-size: 14px; }
+
+.home-stage {
+  position: relative; display: grid; min-height: 100svh; padding: 88px 0 130px; place-items: center;
+}
+.home-login { position: relative; z-index: 5; width: min(510px, 100%); text-align: center; }
+.home-title { margin: 0 0 44px; font-size: clamp(54px, 7.5vw, 82px); }
+.home-title span { color: var(--red); }
+.home-login .stack { width: min(430px, 100%); margin: 0 auto; }
+.home-login .button { min-height: 48px; }
+.home-feature-notes { position: absolute; inset: 0; z-index: 1; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+.home-feature-note {
+  position: absolute; display: grid; width: 178px; min-height: 150px; padding: 34px 22px 24px;
+  place-items: center; border: 1px solid rgba(104, 84, 34, .25); background: var(--note-yellow);
+  box-shadow: 6px 8px 0 rgba(63, 54, 25, .1); text-align: center;
+  font-family: "Klee", "Noteworthy", "Avenir Next", sans-serif; font-size: 21px; line-height: 1.25;
+}
+.home-feature-note::before {
+  content: ""; position: absolute; top: 10px; left: calc(50% - 4px); width: 8px; height: 8px;
+  border-radius: 50%; background: var(--red); box-shadow: 1px 2px 2px #8d332a;
+}
+.home-feature-note-intro { top: 9%; left: 1%; transform: rotate(-7deg); }
+.home-feature-note-read { top: 15%; right: 2%; background: var(--note-green); transform: rotate(5deg); }
+.home-feature-note-write { bottom: 8%; left: 9%; background: var(--note-blue); transform: rotate(4deg); }
+.home-feature-note-control { right: 4%; bottom: 5%; width: 205px; background: var(--note-pink); transform: rotate(-5deg); }
 
 .stack { display: grid; gap: 12px; }
 .field { width: 100%; border: 1px solid var(--ink); background: #fff; padding: 13px 14px; color: var(--ink); outline: none; }
@@ -270,11 +290,23 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
 .gate { margin: 60px auto; max-width: 560px; text-align: center; }
 .gate .lock { font-size: 42px; }
 .fineprint { font-size: 11px !important; }
-.protocol { display: inline-block; background: #e9e1cf; padding: 4px 7px; color: #655f52; }
+
+@media (max-width: 940px) {
+  .home-stage { display: flex; min-height: 0; padding: 64px 0 72px; flex-direction: column; }
+  .home-title { margin-bottom: 38px; font-size: clamp(50px, 12vw, 68px); }
+  .home-feature-notes {
+    position: static; display: grid; width: 100%; margin-top: 70px; padding: 0 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; pointer-events: none;
+  }
+  .home-feature-note { position: relative; width: 100%; min-height: 135px; font-size: 19px; }
+  .home-feature-note-intro { top: auto; left: auto; transform: rotate(-4deg); }
+  .home-feature-note-read { top: auto; right: auto; transform: rotate(3deg); }
+  .home-feature-note-write { bottom: auto; left: auto; transform: rotate(2deg); }
+  .home-feature-note-control { right: auto; bottom: auto; transform: rotate(-3deg); }
+}
 
 @media (max-width: 760px) {
-  .grid, .board-layout { grid-template-columns: 1fr; }
-  .hero { padding-top: 52px; }
+  .board-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; grid-row: 1; }
   .topbar { flex-wrap: wrap; gap: 12px; padding: 14px 0; }
   .topbar-actions { flex-basis: 100%; gap: 10px; }
