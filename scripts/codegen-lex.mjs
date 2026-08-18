@@ -17,6 +17,7 @@ const lexicons = [
   "app.bsky.graph.follow",
   "app.bsky.graph.getRelationships",
   "app.bsky.actor.getProfile",
+  "app.bsky.actor.searchActorsTypeahead",
 ];
 
 execFileSync(

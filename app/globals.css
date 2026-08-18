@@ -81,6 +81,31 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 8vw,
 .stack { display: grid; gap: 12px; }
 .field { width: 100%; border: 1px solid var(--ink); background: #fff; padding: 13px 14px; color: var(--ink); outline: none; }
 .field:focus { box-shadow: 4px 4px 0 var(--yellow); }
+.login-handle-control { position: relative; }
+.login-handle-field {
+  display: flex; align-items: stretch; width: 100%; border: 1px solid var(--ink); background: #fff;
+}
+.login-handle-field:focus-within { box-shadow: 4px 4px 0 var(--yellow); }
+.login-handle-prefix {
+  display: grid; place-items: center; padding: 0 0 0 14px; color: var(--muted); font-weight: 800;
+}
+.login-handle-input {
+  width: 100%; min-width: 0; border: 0; background: transparent; padding: 13px 14px 13px 3px; color: var(--ink); outline: none;
+}
+.login-handle-input::placeholder { color: var(--muted); opacity: .65; }
+.login-handle-suggestions {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0;
+  display: grid; border: 1px solid var(--ink); background: #fff; box-shadow: var(--shadow);
+}
+.login-handle-suggestion {
+  display: grid; gap: 2px; width: 100%; border: 0; border-bottom: 1px solid var(--line);
+  background: #fff; padding: 10px 14px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.login-handle-suggestion:last-child { border-bottom: 0; }
+.login-handle-suggestion:hover,
+.login-handle-suggestion[aria-selected="true"] { background: var(--note-yellow); }
+.login-handle-suggestion-name { overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.login-handle-suggestion-handle { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
