@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import "./check-atproto-revision.mjs";
 
 const lexicons = [
   "com.atproto.simplespace.createSpace",
@@ -25,7 +24,7 @@ execFileSync(
   [
     "build",
     "--lexicons",
-    fileURLToPath(new URL("../../atproto/lexicons", import.meta.url)),
+    fileURLToPath(new URL("../lexicons/upstream", import.meta.url)),
     "--out",
     fileURLToPath(new URL("../lib/lexicons", import.meta.url)),
     "--clear",

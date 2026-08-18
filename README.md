@@ -13,8 +13,9 @@ inside the same space. Labels never leak through the public label stream.
 
 ### Against the local multi-PDS testnet
 
-The demo targets the `permissioned-data` branch in the sibling `../atproto`
-checkout and Node 22 or newer.
+The demo uses the `alpha` releases of the permissioned-data packages and
+requires Node 22 or newer. A sibling `../atproto` checkout is only needed to
+run the local multi-PDS network.
 
 First, start the multi-PDS network:
 

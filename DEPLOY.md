@@ -32,10 +32,10 @@ pnpm check
 pnpm build
 ```
 
-The local build expects the permissioned-data `atproto` checkout at
-`../atproto`. The Railway Dockerfile downloads the exact tested commit itself.
-It builds `@atproto/space` and the other required packages directly from that
-source checkout; none of them need to be published to npm.
+The build installs the permissioned-data packages from their npm `alpha`
+release. The upstream Lexicons needed for client generation are vendored in
+this repository, so neither local nor Railway builds need an `atproto`
+checkout.
 
 ## 3. Deploy on Railway
 

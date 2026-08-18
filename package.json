@@ -15,21 +15,20 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "migrate": "node --import tsx scripts/migrate.ts",
     "publish-lexicons": "node --import tsx scripts/publish-lexicons.ts",
-    "check:atproto-revision": "node scripts/check-atproto-revision.mjs",
     "codegen:lex": "node scripts/codegen-lex.mjs",
     "test": "node --import tsx --test lib/**/*.test.ts"
   },
   "dependencies": {
-    "@atproto/common-web": "link:../atproto/packages/common-web",
-    "@atproto/identity": "link:../atproto/packages/identity",
-    "@atproto/jwk-jose": "link:../atproto/packages/oauth/jwk-jose",
-    "@atproto/lex-client": "^0.3.3",
+    "@atproto/common-web": "alpha",
+    "@atproto/identity": "alpha",
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/lex-client": "alpha",
     "@atproto/lex-data": "^0.1.7",
-    "@atproto/lex-schema": "^0.2.5",
-    "@atproto/oauth-client-node": "link:../atproto/packages/oauth/oauth-client-node",
-    "@atproto/space": "link:../atproto/packages/space",
-    "@atproto/syntax": "link:../atproto/packages/syntax",
-    "@atproto/xrpc-server": "link:../atproto/packages/xrpc-server",
+    "@atproto/lex-schema": "alpha",
+    "@atproto/oauth-client-node": "alpha",
+    "@atproto/space": "alpha",
+    "@atproto/syntax": "alpha",
+    "@atproto/xrpc-server": "alpha",
     "better-sqlite3": "^12.5.0",
     "kysely": "^0.29.5",
     "next": "16.1.1",
@@ -38,7 +37,7 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
-    "@atproto/lex": "^0.3.5",
+    "@atproto/lex": "alpha",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
@@ -49,7 +48,12 @@
   },
   "pnpm": {
     "overrides": {
-      "@atproto/lex-schema": "link:../atproto/packages/lex/lex-schema"
+      "@atproto/lex-builder": "alpha",
+      "@atproto/lex-client": "alpha",
+      "@atproto/lex-document": "alpha",
+      "@atproto/lex-installer": "alpha",
+      "@atproto/lex-resolver": "alpha",
+      "@atproto/lex-schema": "alpha"
     }
   },
   "packageManager": "pnpm@8.15.9"
