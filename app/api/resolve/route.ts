@@ -1,5 +1,4 @@
-import { cacheIdentity, resolveIdentifier } from "@/lib/atproto/identity";
-import { getAccount, hasBoard } from "@/lib/db/queries";
+import { resolveNavigationHandle } from "@/lib/board-navigation";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -8,15 +7,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Enter a handle" }, { status: 400 });
   }
   try {
-    const did = await resolveIdentifier(identifier);
-    await cacheIdentity(did).catch(() => undefined);
-    if (!(await hasBoard(did))) {
-      return NextResponse.json(
-        { error: `@${identifier.replace(/^@/, "")} does not have a Bulletin board yet` },
-        { status: 404 },
-      );
-    }
-    const handle = (await getAccount(did))?.handle;
+    const handle = await resolveNavigationHandle(identifier);
     if (!handle) {
       return NextResponse.json({ error: "That account has no handle" }, { status: 404 });
     }
