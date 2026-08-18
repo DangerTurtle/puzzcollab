@@ -15,6 +15,13 @@ export function isSpaceNotFoundError(error: unknown): boolean {
   return error instanceof LexError && error.error === "SpaceNotFound";
 }
 
+export function isSpaceAccessDeniedError(error: unknown): boolean {
+  return (
+    error instanceof LexError &&
+    (error.error === "UserNotAuthorized" || error.error === "NotAuthorized")
+  );
+}
+
 export function isBoardAbsentError(error: unknown): boolean {
   return (
     error instanceof WatchInvalidatedError ||

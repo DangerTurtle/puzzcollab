@@ -1,57 +1,28 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-
-type ActorSuggestion = {
-  did: string;
-  handle: string;
-  displayName: string | null;
-};
+import { useId, useState } from "react";
+import {
+  type ActorSuggestion,
+  useActorTypeahead,
+} from "./useActorTypeahead";
 
 export function LoginForm() {
   const [handle, setHandle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [suggestions, setSuggestions] = useState<ActorSuggestion[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
-  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const {
+    suggestions,
+    activeSuggestion,
+    setActiveSuggestion,
+    clearSuggestions,
+  } = useActorTypeahead(handle, searchFocused);
   const suggestionListId = useId();
   const suggestionsOpen = searchFocused && suggestions.length > 0;
 
-  useEffect(() => {
-    const query = handle.trim().replace(/^@+/, "");
-    if (!searchFocused || query.length < 2) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/actors/search?q=${encodeURIComponent(query)}`,
-          { signal: controller.signal },
-        );
-        if (!response.ok) throw new Error(`Handle search failed (${response.status})`);
-        const body = (await response.json()) as { actors?: ActorSuggestion[] };
-        setSuggestions(body.actors ?? []);
-        setActiveSuggestion(-1);
-      } catch (searchError) {
-        if (searchError instanceof Error && searchError.name === "AbortError") return;
-        setSuggestions([]);
-        setActiveSuggestion(-1);
-      }
-    }, 200);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [handle, searchFocused]);
-
   function selectSuggestion(actor: ActorSuggestion) {
     setHandle(actor.handle);
-    setSuggestions([]);
-    setActiveSuggestion(-1);
+    clearSuggestions();
     setSearchFocused(false);
   }
 
@@ -103,8 +74,7 @@ export function LoginForm() {
             value={handle}
             onChange={(event) => {
               setHandle(event.target.value.replace(/^@+/, ""));
-              setSuggestions([]);
-              setActiveSuggestion(-1);
+              clearSuggestions();
               setSearchFocused(true);
             }}
             onFocus={() => setSearchFocused(true)}

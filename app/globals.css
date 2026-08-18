@@ -74,6 +74,22 @@ a { color: inherit; }
   border: 1px solid var(--red); background: #fff4ef; color: var(--red);
   padding: 8px 10px; font-size: 11px; line-height: 1.35; box-shadow: var(--shadow);
 }
+.board-search-suggestions {
+  position: absolute; z-index: 30; top: calc(100% + 7px); left: 0; right: 0;
+  display: grid; max-height: 320px; overflow-y: auto; border: 1px solid var(--ink);
+  background: #fff; box-shadow: var(--shadow);
+}
+.board-search-suggestion {
+  display: grid; gap: 2px; width: 100%; border: 0; border-bottom: 1px solid var(--line);
+  background: #fff; padding: 9px 11px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.board-search-suggestion:last-child { border-bottom: 0; }
+.board-search-suggestion:hover,
+.board-search-suggestion[aria-selected="true"] { background: var(--note-yellow); }
+.board-search-suggestion-name,
+.board-search-suggestion-handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-search-suggestion-name { font-size: 12px; font-weight: 800; }
+.board-search-suggestion-handle { color: var(--muted); font-size: 11px; }
 
 h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 8vw, 88px); line-height: .92; letter-spacing: -.055em; margin: 18px 0 24px; }
 

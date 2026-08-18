@@ -1,20 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import {
+  type ActorSuggestion,
+  useActorTypeahead,
+} from "./useActorTypeahead";
 
-type KnownBoard = { ownerDid: string; handle: string | null };
-
-export function BoardFinder({
-  knownBoards,
-}: {
-  knownBoards: KnownBoard[];
-}) {
+export function BoardFinder() {
   const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const {
+    suggestions,
+    activeSuggestion,
+    setActiveSuggestion,
+    clearSuggestions,
+  } = useActorTypeahead(identifier, searchFocused);
+  const suggestionListId = useId();
+  const suggestionsOpen = searchFocused && suggestions.length > 0;
+
+  function openSuggestion(actor: ActorSuggestion) {
+    window.location.href = `/${encodeURIComponent(actor.handle)}`;
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!suggestionsOpen) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSuggestion((current) => (current + 1) % suggestions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSuggestion((current) =>
+        current <= 0 ? suggestions.length - 1 : current - 1,
+      );
+    } else if (event.key === "Enter" && activeSuggestion >= 0) {
+      event.preventDefault();
+      openSuggestion(suggestions[activeSuggestion]);
+    } else if (event.key === "Escape") {
+      setSearchFocused(false);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    setSearchFocused(false);
+    clearSuggestions();
     setBusy(true);
     setError(undefined);
     const url = new URL("/api/resolve", window.location.origin);
@@ -36,22 +67,53 @@ export function BoardFinder({
         <input
           className="board-search-input"
           value={identifier}
-          onChange={(event) => setIdentifier(event.target.value.replace(/^@+/, ""))}
+          onChange={(event) => {
+            setIdentifier(event.target.value.replace(/^@+/, ""));
+            clearSuggestions();
+            setSearchFocused(true);
+          }}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          onKeyDown={handleSearchKeyDown}
           placeholder="find someone"
           aria-label="Board owner handle"
-          list="known-boards"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={suggestionsOpen}
+          aria-controls={suggestionListId}
+          aria-activedescendant={
+            activeSuggestion >= 0
+              ? `${suggestionListId}-${activeSuggestion}`
+              : undefined
+          }
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
         />
       </div>
-      <datalist id="known-boards">
-        {knownBoards
-          .filter((board) => board.handle)
-          .map((board) => (
-            <option key={board.ownerDid} value={board.handle ?? ""} />
+      {suggestionsOpen && (
+        <div className="board-search-suggestions" id={suggestionListId} role="listbox">
+          {suggestions.map((actor, index) => (
+            <button
+              key={actor.did}
+              id={`${suggestionListId}-${index}`}
+              className="board-search-suggestion"
+              type="button"
+              role="option"
+              aria-selected={index === activeSuggestion}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openSuggestion(actor)}
+            >
+              <span className="board-search-suggestion-name">
+                {actor.displayName || `@${actor.handle}`}
+              </span>
+              {actor.displayName && (
+                <span className="board-search-suggestion-handle">@{actor.handle}</span>
+              )}
+            </button>
           ))}
-      </datalist>
+        </div>
+      )}
       {error && <div className="board-search-error">{error}</div>}
       <button
         className="board-search-button"

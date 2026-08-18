@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/LoginForm";
 import { SpatialBoard } from "@/components/SpatialBoard";
 import { getRelationship, type Relationship } from "@/lib/atproto/follows";
 import { getProfile, type Profile } from "@/lib/atproto/profile";
+import { probeSpaceExists } from "@/lib/atproto/space-existence";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
 import { getSession } from "@/lib/auth/session";
 import { discoverBoardForDid } from "@/lib/board-discovery";
@@ -65,6 +66,30 @@ export default async function BoardPage({
     if (!relationship.follows) {
       const restrictedProfile = await getProfile(ownerDid);
       const restrictedHandle = restrictedProfile?.handle ?? owner?.handle;
+      let restrictedBoardExists: boolean | undefined;
+      try {
+        restrictedBoardExists = await probeSpaceExists(session, space);
+      } catch (error) {
+        console.error("Could not check whether board exists", error);
+      }
+      if (restrictedBoardExists === false) {
+        return (
+          <BoardMissing
+            viewerDid={session.did}
+            ownerHandle={restrictedHandle}
+            avatar={restrictedProfile?.avatar}
+          />
+        );
+      }
+      if (restrictedBoardExists === undefined) {
+        return (
+          <BoardUnavailable
+            viewerDid={session.did}
+            ownerHandle={restrictedHandle}
+            avatar={restrictedProfile?.avatar}
+          />
+        );
+      }
       return (
         <main className="shell board-page">
           <Header did={session.did} />
@@ -126,16 +151,11 @@ export default async function BoardPage({
       );
     }
     return (
-      <main className="shell">
-        <Header did={session.did} />
-        <div className="gate stack">
-          <h1 className="gate-title">nothing pinned here yet</h1>
-          <p>
-            {ownerHandle ? `@${ownerHandle}` : "this person"} hasn’t put up a
-            bulletin
-          </p>
-        </div>
-      </main>
+      <BoardMissing
+        viewerDid={session.did}
+        ownerHandle={ownerHandle}
+        avatar={ownerProfile?.avatar}
+      />
     );
   }
 
@@ -205,6 +225,29 @@ function BoardUnavailable({
         <div className="gate-sticker">give it a minute</div>
         <h1 className="gate-title">this bulletin couldn’t be opened</h1>
         <p>something went wrong — try again in a moment</p>
+      </div>
+    </main>
+  );
+}
+
+function BoardMissing({
+  viewerDid,
+  ownerHandle,
+  avatar,
+}: {
+  viewerDid: string;
+  ownerHandle: string | null | undefined;
+  avatar: string | null | undefined;
+}) {
+  return (
+    <main className="shell">
+      <Header did={viewerDid} />
+      <section className="board-head">
+        <BoardTitle ownerHandle={ownerHandle} avatar={avatar} />
+      </section>
+      <div className="gate">
+        <h1 className="gate-title">this bulletin doesn’t exist</h1>
+        <p>{ownerHandle ? `@${ownerHandle}` : "this person"} hasn’t put one up</p>
       </div>
     </main>
   );
