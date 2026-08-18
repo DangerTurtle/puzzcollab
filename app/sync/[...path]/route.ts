@@ -1,4 +1,4 @@
-import { getRuntimeConfig } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ async function proxy(request: NextRequest, { params }: Context): Promise<Respons
     return new Response("Not found", { status: 404 });
   }
   const path = segments.join("/");
-  const base = new URL(`${getRuntimeConfig().syncInternalUrl}/`);
+  const base = new URL(`${getConfig().syncInternalUrl}/`);
   const target = new URL(path, base);
   if (
     target.origin !== base.origin ||

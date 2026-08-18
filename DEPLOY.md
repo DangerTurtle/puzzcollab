@@ -48,8 +48,7 @@ checkout.
    used by the loopback sync listener inside the same application process.
 5. `env/production.env` provides the public URLs, DIDs, production
    resolvers, loopback sync URL, and `/data/bulletin.db` database path. Add
-   Railway variables only when overriding those defaults. The available names
-   are documented in `.env.example`; for example:
+   Railway variables only when overriding those defaults. For example:
 
 ```text
 DATABASE_PATH=/data/bulletin.db

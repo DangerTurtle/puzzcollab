@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { getRuntimeConfig } from "./config";
+import { getConfig } from "./config";
 
 const LEXICON_COLLECTION = "com.atproto.lexicon.schema";
 
@@ -111,7 +111,7 @@ async function getAuthority(): Promise<Authority> {
       "Set LEXICON_AUTHORITY_HANDLE, LEXICON_AUTHORITY_PASSWORD, and LEXICON_AUTHORITY_PDS together.",
     );
   }
-  const { devIntrospectUrl } = getRuntimeConfig();
+  const { devIntrospectUrl } = getConfig();
 
   let introspectionResponse: Response;
   try {

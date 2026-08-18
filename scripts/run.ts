@@ -1,14 +1,7 @@
-import {
-  applyRuntimeProfile,
-  loadRuntimeProfile,
-  parseProfileName,
-} from "../lib/runtime-profile";
+import { getConfig } from "../lib/config";
 import { BulletinApplication } from "./application";
 
-const profile = await loadRuntimeProfile(parseProfileName(process.argv.slice(2)));
-applyRuntimeProfile(profile);
-
-const application = new BulletinApplication(profile);
+const application = new BulletinApplication(getConfig());
 let stopping = false;
 
 async function stop(exitCode = 0): Promise<void> {

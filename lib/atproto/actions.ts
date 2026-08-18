@@ -7,7 +7,7 @@ import {
   POST_COLLECTION,
   SPACE_TYPE,
   boardUri,
-  getRuntimeConfig,
+  getConfig,
 } from "../config";
 import {
   deleteStoredPost,
@@ -36,7 +36,7 @@ export async function createBoard(session: OAuthSession): Promise<string> {
     skey: "self",
     policy: {
       $type: "com.atproto.simplespace.defs#managingAppPolicy",
-      managingApp: getRuntimeConfig().managingAppService,
+      managingApp: getConfig().managingAppService,
     },
     appAccess: {
       $type: "com.atproto.simplespace.defs#open",

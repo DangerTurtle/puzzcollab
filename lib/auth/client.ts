@@ -6,7 +6,7 @@ import {
 } from "@atproto/oauth-client-node";
 import { sql } from "kysely";
 import { isIP } from "node:net";
-import { getRuntimeConfig } from "../config";
+import { getConfig } from "../config";
 import { resolveHandle } from "../atproto/identity";
 import { getQueryDb } from "../db";
 import { getClientMetadata } from "./metadata";
@@ -15,7 +15,7 @@ let oauthClient: NodeOAuthClient | undefined;
 
 export async function getOAuthClient(): Promise<NodeOAuthClient> {
   if (oauthClient) return oauthClient;
-  const config = getRuntimeConfig();
+  const config = getConfig();
 
   oauthClient = new NodeOAuthClient({
     clientMetadata: getClientMetadata(),

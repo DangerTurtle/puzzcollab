@@ -1,5 +1,5 @@
 import { verifyJwt } from "@atproto/xrpc-server";
-import { getRuntimeConfig } from "../config";
+import { getConfig } from "../config";
 import { getIdResolver } from "./identity";
 
 const CHECK_ACCESS_LXM = "com.atproto.simplespace.checkUserAccess";
@@ -13,7 +13,7 @@ export async function verifyManagingAppRequest(
 
   const payload = await verifyJwt(
     token,
-    getRuntimeConfig().managingAppService,
+    getConfig().managingAppService,
     CHECK_ACCESS_LXM,
     async (issuer, forceRefresh) => {
       const did = issuer.split("#")[0];

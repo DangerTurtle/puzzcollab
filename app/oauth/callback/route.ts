@@ -7,14 +7,14 @@ import {
   WEB_SESSION_COOKIE_NAME,
   webSessionCookieOptions,
 } from "@/lib/auth/web-session";
-import { getRuntimeConfig } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { discoverBoardForDid } from "@/lib/board-discovery";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const { uiPublicUrl } = getRuntimeConfig();
+  const { uiPublicUrl } = getConfig();
   try {
     const { session } = await (await getOAuthClient()).callback(
       request.nextUrl.searchParams,

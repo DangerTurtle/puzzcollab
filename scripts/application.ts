@@ -1,9 +1,9 @@
 import { createServer, type Server } from "node:http";
 import next from "next";
+import type { Config } from "../lib/config";
 import { migrate } from "../lib/db/migrations";
 import { publishLexicons } from "../lib/lexicon-publisher";
 import { SyncService } from "../lib/sync/service";
-import type { RuntimeProfile } from "../lib/runtime-profile";
 
 class WebService {
   readonly #development: boolean;
@@ -12,10 +12,10 @@ class WebService {
   #next: ReturnType<typeof next> | undefined;
   #server: Server | undefined;
 
-  constructor(profile: RuntimeProfile) {
-    this.#development = profile.development;
-    this.#hostname = profile.config.hostname;
-    this.#port = profile.config.port;
+  constructor(config: Config) {
+    this.#development = config.development;
+    this.#hostname = config.hostname;
+    this.#port = config.port;
   }
 
   async start(): Promise<void> {
@@ -67,29 +67,29 @@ class WebService {
 }
 
 export class BulletinApplication {
-  readonly #profile: RuntimeProfile;
+  readonly #publishLexicons: boolean;
   readonly #sync: SyncService;
   readonly #web: WebService;
   #closeTask: Promise<void> | undefined;
 
-  constructor(profile: RuntimeProfile) {
-    this.#profile = profile;
+  constructor(config: Config) {
+    this.#publishLexicons = config.publishLexicons;
     this.#sync = new SyncService({
-      internalUrl: profile.config.syncInternalUrl,
-      publicUrl: profile.config.syncPublicUrl,
-      serviceDid: profile.config.syncServiceDid,
-      serviceId: profile.config.syncService,
-      managingAppService: profile.config.managingAppService,
-      hostname: profile.config.syncHostname,
-      pollInterval: profile.config.syncPollInterval,
+      internalUrl: config.syncInternalUrl,
+      publicUrl: config.syncPublicUrl,
+      serviceDid: config.syncServiceDid,
+      serviceId: config.syncService,
+      managingAppService: config.managingAppService,
+      hostname: config.syncHostname,
+      pollInterval: config.syncPollInterval,
     });
-    this.#web = new WebService(profile);
+    this.#web = new WebService(config);
   }
 
   async start(): Promise<void> {
     await migrate();
     console.log("database is ready");
-    if (this.#profile.publishLexicons) await publishLexicons();
+    if (this.#publishLexicons) await publishLexicons();
     try {
       await this.#sync.start();
       await this.#web.start();
@@ -97,7 +97,6 @@ export class BulletinApplication {
       await this.close().catch(() => undefined);
       throw error;
     }
-    console.log(`Bulletin profile ${this.#profile.name}`);
   }
 
   close(): Promise<void> {

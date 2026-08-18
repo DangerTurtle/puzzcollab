@@ -35,7 +35,7 @@ pnpm dev:local
 Open <http://127.0.0.1:3000>. The dev network seeds `alice`, `bob`, and `carol`
 on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
 
-The `local` profile migrates SQLite, publishes the `at.dholms.bulletin`
+The `local` environment migrates SQLite, publishes the `at.dholms.bulletin`
 Lexicons to the test network's Lexicon authority, and starts both Next.js and
 the sync service in one Node process.
 On sign-in, Bulletin rediscovers the user's deterministic board. Other boards
@@ -51,7 +51,7 @@ Atmosphere accounts, use:
 pnpm dev
 ```
 
-Open <http://127.0.0.1:3000>. The `dev` profile uses the production PLC and
+Open <http://127.0.0.1:3000>. The `dev` environment uses the production PLC and
 handle resolver and stores state in `bulletin-dev.db`, so it cannot mix with
 local-testnet sessions. It does not start the multi-PDS network or publish
 Lexicons. It uses the deployed
@@ -61,20 +61,19 @@ database are local. PDS notifications therefore go to the deployed sync
 service; the local sync worker reconciles watched boards every 10 seconds to
 keep its isolated database current.
 
-## Runtime profiles
+## Environments
 
-Bulletin has three profiles, all run by the same application entry point:
+Bulletin has three environments, all run by the same application entry point:
 
-| Profile | Command | Purpose |
+| Environment | Command | Purpose |
 | --- | --- | --- |
 | `local` | `pnpm dev:local` | Local multi-PDS testnet |
 | `dev` | `pnpm dev` | Local development against Atmosphere |
 | `production` | `pnpm start` | Built application on Railway |
 
-Shared defaults live in `env/common.env`, with profile values in
-`env/local.env`, `env/dev.env`, and `env/production.env`. Runtime overrides can
-go in `.env`, `.env.local`, or `.env.<profile>.local`; shell and deployment
-variables take precedence. `.env.example` lists the supported settings.
+Shared values live in `env/common.env`; each command layers one of
+`env/local.env`, `env/dev.env`, or `env/production.env` over it using Node's
+native env-file support. Shell and deployment variables take precedence.
 
 ## Key pieces
 
@@ -84,7 +83,7 @@ variables take precedence. `.env.example` lists the supported settings.
 - `lib/db`: Kysely-backed SQLite state, OAuth storage, posts, and labels
 - `lexicons/at/dholms`: board, post, position, label, and permission declarations
 
-The `local` profile uses a loopback OAuth client and the service DID
+The `local` environment uses a loopback OAuth client and the service DID
 `did:web:localhost%3A3000#bulletin`.
 
 For production setup and Railway deployment, see [DEPLOY.md](./DEPLOY.md).

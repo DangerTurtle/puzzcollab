@@ -13,7 +13,6 @@ next-env.d.ts
 
 # Local environment and deployment state
 .env*
-!.env.example
 .vercel/
 *.local
 

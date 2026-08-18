@@ -1,7 +1,7 @@
-import { getRuntimeConfig } from "../config";
+import { getConfig } from "../config";
 
 export async function discoverBoard(space: string): Promise<boolean> {
-  const response = await fetch(`${getRuntimeConfig().syncInternalUrl}/watch`, {
+  const response = await fetch(`${getConfig().syncInternalUrl}/watch`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ space }),

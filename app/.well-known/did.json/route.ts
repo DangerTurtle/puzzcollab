@@ -1,8 +1,8 @@
-import { getRuntimeConfig } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { NextResponse } from "next/server";
 
 export function GET() {
-  const config = getRuntimeConfig();
+  const config = getConfig();
   const services = [
     {
       id: config.managingAppService,

@@ -12,7 +12,9 @@ export const OAUTH_SCOPE = [
   `include:${BULLETIN_PERMISSION_SET}`,
 ].join(" ");
 
-export type RuntimeConfig = {
+export type Config = {
+  development: boolean;
+  publishLexicons: boolean;
   hostname: string;
   port: number;
   syncHostname: string;
@@ -37,19 +39,13 @@ export type RuntimeConfig = {
 
 type Environment = Record<string, string | undefined>;
 
-let configuredRuntime: RuntimeConfig | undefined;
-
-export function configureRuntime(config: RuntimeConfig): void {
-  configuredRuntime = config;
+export function getConfig(): Config {
+  return readConfig(process.env);
 }
 
-export function getRuntimeConfig(): RuntimeConfig {
-  return configuredRuntime ?? resolveRuntimeConfig(process.env);
-}
-
-export function resolveRuntimeConfig(
+export function readConfig(
   environment: Environment = process.env,
-): RuntimeConfig {
+): Config {
   const devPlcUrl = absoluteUrl(
     "DEV_PLC_URL",
     environment.DEV_PLC_URL ?? "http://localhost:2582",
@@ -63,6 +59,11 @@ export function resolveRuntimeConfig(
     environment.SYNC_INTERNAL_URL ?? "http://127.0.0.1:3001",
   );
   return {
+    development: environment.NODE_ENV !== "production",
+    publishLexicons: boolean(
+      environment.PUBLISH_LEXICONS ?? "false",
+      "PUBLISH_LEXICONS",
+    ),
     hostname: environment.BULLETIN_HOST ?? "127.0.0.1",
     port: integer(
       environment.BULLETIN_PORT ?? "3000",
@@ -114,6 +115,12 @@ export function resolveRuntimeConfig(
     databasePath: environment.DATABASE_PATH ?? "bulletin.db",
     blobDirectory: environment.BLOB_DIRECTORY,
   };
+}
+
+function boolean(value: string, name: string): boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
 }
 
 export function boardUri(ownerDid: string): string {

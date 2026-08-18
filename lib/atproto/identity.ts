@@ -1,12 +1,12 @@
 import { getPdsEndpoint } from "@atproto/common-web";
 import { IdResolver } from "@atproto/identity";
-import { getRuntimeConfig } from "../config";
+import { getConfig } from "../config";
 import { getAccount, saveAccount } from "../db/queries";
 
 let resolver: IdResolver | undefined;
 
 export function getIdResolver(): IdResolver {
-  resolver ??= new IdResolver({ plcUrl: getRuntimeConfig().plcUrl });
+  resolver ??= new IdResolver({ plcUrl: getConfig().plcUrl });
   return resolver;
 }
 
@@ -38,7 +38,7 @@ export async function resolveIdentifier(identifier: string): Promise<string> {
 }
 
 export async function resolveHandle(handle: string): Promise<string | null> {
-  const { handleResolverUrl } = getRuntimeConfig();
+  const { handleResolverUrl } = getConfig();
   if (handleResolverUrl) {
     return resolveHandleAt(handleResolverUrl, handle);
   }
@@ -63,7 +63,7 @@ async function resolveHandleAt(service: string, handle: string): Promise<string 
 }
 
 async function getDevPdsUrls(handle: string): Promise<string[]> {
-  const { devIntrospectUrl, devPdsUrl } = getRuntimeConfig();
+  const { devIntrospectUrl, devPdsUrl } = getConfig();
   try {
     const response = await fetch(devIntrospectUrl);
     if (!response.ok) throw new Error(`Introspection failed (${response.status})`);

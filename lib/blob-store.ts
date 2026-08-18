@@ -8,7 +8,7 @@ import {
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { parseCid } from "@atproto/lex-data";
-import { getRuntimeConfig } from "./config";
+import { getConfig } from "./config";
 
 export function storeBlobFile(cid: string, bytes: Uint8Array): void {
   mkdirSync(getBlobDirectory(), { recursive: true });
@@ -49,7 +49,7 @@ function blobPath(cid: string): string {
 }
 
 function getBlobDirectory(): string {
-  const { blobDirectory, databasePath } = getRuntimeConfig();
+  const { blobDirectory, databasePath } = getConfig();
   return path.resolve(
     blobDirectory ??
       path.join(path.dirname(path.resolve(databasePath)), "bulletin-blobs"),

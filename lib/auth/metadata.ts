@@ -1,8 +1,8 @@
 import { buildAtprotoLoopbackClientMetadata } from "@atproto/oauth-client-node";
-import { getRuntimeConfig, OAUTH_SCOPE } from "../config";
+import { getConfig, OAUTH_SCOPE } from "../config";
 
 export function getClientMetadata() {
-  const { uiPublicUrl } = getRuntimeConfig();
+  const { uiPublicUrl } = getConfig();
   const appUrl = new URL(uiPublicUrl);
   const redirectUri = `${uiPublicUrl}/oauth/callback`;
   if (appUrl.hostname === "localhost" || appUrl.hostname === "127.0.0.1") {

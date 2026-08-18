@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { CamelCasePlugin, Kysely, SqliteDialect } from "kysely";
-import { getRuntimeConfig } from "../config";
+import { getConfig } from "../config";
 import type { DatabaseSchema } from "./schema";
 
 let database: Database.Database | undefined;
@@ -8,7 +8,7 @@ let queryDatabase: Kysely<DatabaseSchema> | undefined;
 
 export function getDb(): Database.Database {
   if (!database) {
-    database = new Database(getRuntimeConfig().databasePath);
+    database = new Database(getConfig().databasePath);
     database.pragma("journal_mode = WAL");
     database.pragma("foreign_keys = ON");
   }
