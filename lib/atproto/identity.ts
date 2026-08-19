@@ -38,9 +38,10 @@ export async function resolveIdentifier(identifier: string): Promise<string> {
 }
 
 export async function resolveHandle(handle: string): Promise<string | null> {
-  const { bskyUrl, devIntrospectUrl } = getConfig();
-  const resolved = await resolveHandleAt(bskyUrl, handle);
-  if (resolved || !devIntrospectUrl) return resolved;
+  const { devIntrospectUrl } = getConfig();
+  const resolved = await getIdResolver().handle.resolve(handle);
+  if (resolved) return resolved;
+  if (!devIntrospectUrl) return null;
 
   for (const pdsUrl of await getDevPdsUrls(devIntrospectUrl, handle)) {
     const did = await resolveHandleAt(pdsUrl, handle);
@@ -52,7 +53,7 @@ export async function resolveHandle(handle: string): Promise<string | null> {
 async function resolveHandleAt(service: string, handle: string): Promise<string | null> {
   const url = new URL(`${service}/xrpc/com.atproto.identity.resolveHandle`);
   url.searchParams.set("handle", handle);
-  const response = await fetch(url);
+  const response = await fetch(url, { cache: "no-store" });
   if (response.ok) {
     const body = (await response.json()) as { did: string };
     return body.did;
