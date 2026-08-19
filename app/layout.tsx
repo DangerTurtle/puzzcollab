@@ -3,7 +3,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bulletin",
+  title: "bulletin",
   description: "Private bulletin boards for you and your followers",
 };
 

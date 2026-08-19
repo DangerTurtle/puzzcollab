@@ -128,7 +128,7 @@ export function LoginForm() {
         disabled={busy || !handle.trim()}
         aria-busy={busy}
       >
-        {busy ? "Signing you in…" : "Login with Atmosphere"}
+        {busy ? "signing you in…" : "login with atmosphere"}
       </button>
     </form>
   );
