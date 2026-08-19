@@ -112,6 +112,9 @@ async function getAuthority(): Promise<Authority> {
     );
   }
   const { devIntrospectUrl } = getConfig();
+  if (!devIntrospectUrl) {
+    throw new Error("DEV_INTROSPECT_URL is required to publish local Lexicons");
+  }
 
   let introspectionResponse: Response;
   try {

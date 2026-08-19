@@ -34,7 +34,7 @@ async function verifySpaceNotification(
   if (!authority) throw new Error("Invalid board reference");
   const payload = await verifyJwt(
     token,
-    getConfig().syncService,
+    getConfig().managingAppService,
     lxm,
     async (issuer, forceRefresh) => {
       const did = issuer.split("#")[0];

@@ -38,12 +38,11 @@ export async function resolveIdentifier(identifier: string): Promise<string> {
 }
 
 export async function resolveHandle(handle: string): Promise<string | null> {
-  const { handleResolverUrl } = getConfig();
-  if (handleResolverUrl) {
-    return resolveHandleAt(handleResolverUrl, handle);
-  }
-  const pdsUrls = await getDevPdsUrls(handle);
-  for (const pdsUrl of pdsUrls) {
+  const { bskyUrl, devIntrospectUrl } = getConfig();
+  const resolved = await resolveHandleAt(bskyUrl, handle);
+  if (resolved || !devIntrospectUrl) return resolved;
+
+  for (const pdsUrl of await getDevPdsUrls(devIntrospectUrl, handle)) {
     const did = await resolveHandleAt(pdsUrl, handle);
     if (did) return did;
   }
@@ -62,22 +61,20 @@ async function resolveHandleAt(service: string, handle: string): Promise<string 
   throw new Error(`Handle resolution failed (${response.status})`);
 }
 
-async function getDevPdsUrls(handle: string): Promise<string[]> {
-  const { devIntrospectUrl, devPdsUrl } = getConfig();
-  try {
-    const response = await fetch(devIntrospectUrl);
-    if (!response.ok) throw new Error(`Introspection failed (${response.status})`);
-    const body = (await response.json()) as {
-      pdses?: Array<{ url: string; handleDomains?: string[] }>;
-    };
-    const matches = body.pdses?.filter((pds) =>
+async function getDevPdsUrls(
+  introspectUrl: string,
+  handle: string,
+): Promise<string[]> {
+  const response = await fetch(introspectUrl);
+  if (!response.ok) throw new Error(`Introspection failed (${response.status})`);
+  const body = (await response.json()) as {
+    pdses?: Array<{ url: string; handleDomains?: string[] }>;
+  };
+  return (body.pdses ?? [])
+    .filter((pds) =>
       pds.handleDomains?.some((domain) => handle.endsWith(domain)),
-    );
-    if (matches?.length) return matches.map((pds) => pds.url);
-  } catch {
-    // Fall back to the primary PDS when the dev introspection server is absent.
-  }
-  return [devPdsUrl];
+    )
+    .map((pds) => pds.url);
 }
 
 export async function cacheIdentity(did: string): Promise<void> {

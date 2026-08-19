@@ -76,11 +76,7 @@ export class BulletinApplication {
     this.#publishLexicons = config.publishLexicons;
     this.#sync = new SyncService({
       internalUrl: config.syncInternalUrl,
-      publicUrl: config.syncPublicUrl,
-      serviceDid: config.syncServiceDid,
-      serviceId: config.syncService,
       managingAppService: config.managingAppService,
-      hostname: config.syncHostname,
       pollInterval: config.syncPollInterval,
     });
     this.#web = new WebService(config);

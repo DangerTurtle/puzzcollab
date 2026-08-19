@@ -71,19 +71,20 @@ Bulletin has three environments, all run by the same application entry point:
 | `dev` | `pnpm dev` | Local development against Atmosphere |
 | `production` | `pnpm start` | Built application on Railway |
 
-Shared values live in `env/common.env`; each command layers one of
-`env/local.env`, `env/dev.env`, or `env/production.env` over it using Node's
-native env-file support. Shell and deployment variables take precedence.
+Each command loads one self-contained file: `env/local.env`, `env/dev.env`, or
+`env/production.env`. Shell and deployment variables take precedence.
 
 ## Key pieces
 
 - `app/xrpc/com.atproto.simplespace.checkUserAccess`: managing-app callback
+- `app/xrpc/com.atproto.space.notify*`: public notification ingress
 - `lib/atproto/space-credential.ts`: delegation, credential exchange, and DPoP
 - `lib/sync/engine.ts`: multi-PDS writer discovery and materialization
 - `lib/db`: Kysely-backed SQLite state, OAuth storage, posts, and labels
 - `lexicons/my`: board, post, position, label, and permission declarations
 
-The `local` environment uses a loopback OAuth client and the service DID
-`did:web:localhost%3A3000#bulletin`.
+The main application's `#bulletin` service receives both managing-app calls
+and write notifications. Notification routes forward to the loopback-only
+sync server; its watch and event endpoints are never exposed publicly.
 
 For production setup and Railway deployment, see [DEPLOY.md](./DEPLOY.md).

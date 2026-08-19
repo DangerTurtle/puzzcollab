@@ -8,11 +8,7 @@ import {
 
 export type SyncServiceOptions = {
   internalUrl: string;
-  publicUrl: string;
-  serviceDid: string;
-  serviceId: string;
   managingAppService: string;
-  hostname?: string;
   pollInterval?: number;
 };
 
@@ -31,17 +27,17 @@ export class SyncService {
 
   constructor(options: SyncServiceOptions) {
     this.#options = options;
-    this.#engine = new SyncEngine((space) => this.#broadcast(space), {
-      managingAppService: options.managingAppService,
-      syncService: options.serviceId,
-    });
+    this.#engine = new SyncEngine(
+      (space) => this.#broadcast(space),
+      options.managingAppService,
+    );
   }
 
   async start(): Promise<void> {
     if (this.#started) return;
     const url = new URL(this.#options.internalUrl);
-    const port = Number(url.port || 3001);
-    const hostname = this.#options.hostname ?? "127.0.0.1";
+    const port = Number(url.port || 80);
+    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
 
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
@@ -62,7 +58,7 @@ export class SyncService {
       this.#reconcileTimer.unref();
     }
     this.#resume();
-    console.log(`Bulletin sync service ${this.#options.internalUrl}`);
+    console.log(`Bulletin internal sync service ${this.#options.internalUrl}`);
   }
 
   close(): Promise<void> {
@@ -97,19 +93,6 @@ export class SyncService {
       const url = new URL(request.url ?? "/", this.#options.internalUrl);
       if (request.method === "GET" && url.pathname === "/health") {
         return json(response, 200, { ok: true });
-      }
-      if (request.method === "GET" && url.pathname === "/.well-known/did.json") {
-        return json(response, 200, {
-          "@context": ["https://www.w3.org/ns/did/v1"],
-          id: this.#options.serviceDid,
-          service: [
-            {
-              id: this.#options.serviceId,
-              type: "AtprotoSpaceSyncService",
-              serviceEndpoint: this.#options.publicUrl,
-            },
-          ],
-        });
       }
       if (request.method === "GET" && url.pathname === "/events") {
         const space = url.searchParams.get("space");

@@ -10,13 +10,6 @@ export function GET() {
       serviceEndpoint: config.managingAppPublicUrl,
     },
   ];
-  if (config.syncServiceDid === config.managingAppDid) {
-    services.push({
-      id: config.syncService,
-      type: "AtprotoSpaceSyncService",
-      serviceEndpoint: config.syncPublicUrl,
-    });
-  }
   return NextResponse.json({
     "@context": ["https://www.w3.org/ns/did/v1"],
     id: config.managingAppDid,
