@@ -26,7 +26,7 @@ test("local, dev, and production envs configure distinct behavior", async () => 
   assert.equal(dev.publishLexicons, false);
   assert.equal(dev.databasePath, "bulletin-dev.db");
   assert.equal(dev.syncPollInterval, 10000);
-  assert.equal(dev.managingAppService, "did:web:bulletin.dholms.at#bulletin");
+  assert.equal(dev.managingAppService, "did:web:bulletin.my#bulletin");
 
   assert.equal(production.development, false);
   assert.equal(production.publishLexicons, false);

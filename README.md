@@ -6,7 +6,7 @@ their DID. Other users write notes from their own permissioned repos. The space
 authority delegates read admission to this app, which checks whether the reader
 follows the board owner.
 
-The board owner moderates by publishing `at.dholms.bulletin.label` records
+The board owner moderates by publishing `my.bulletin.label` records
 inside the same space. Labels never leak through the public label stream.
 
 ## Run locally
@@ -35,7 +35,7 @@ pnpm dev:local
 Open <http://127.0.0.1:3000>. The dev network seeds `alice`, `bob`, and `carol`
 on each PDS. Passwords are `<name>-pass`, such as `alice-pass`.
 
-The `local` environment migrates SQLite, publishes the `at.dholms.bulletin`
+The `local` environment migrates SQLite, publishes the `my.bulletin`
 Lexicons to the test network's Lexicon authority, and starts both Next.js and
 the sync service in one Node process.
 On sign-in, Bulletin rediscovers the user's deterministic board. Other boards
@@ -55,7 +55,7 @@ Open <http://127.0.0.1:3000>. The `dev` environment uses the production PLC and
 handle resolver and stores state in `bulletin-dev.db`, so it cannot mix with
 local-testnet sessions. It does not start the multi-PDS network or publish
 Lexicons. It uses the deployed
-`bulletin.dholms.at` managing-app and sync identities, so that production PDSes
+`bulletin.my` managing-app and sync identities, so that production PDSes
 can resolve and call those services even though the development server and its
 database are local. PDS notifications therefore go to the deployed sync
 service; the local sync worker reconciles watched boards every 10 seconds to
@@ -81,7 +81,7 @@ native env-file support. Shell and deployment variables take precedence.
 - `lib/atproto/space-credential.ts`: delegation, credential exchange, and DPoP
 - `lib/sync/engine.ts`: multi-PDS writer discovery and materialization
 - `lib/db`: Kysely-backed SQLite state, OAuth storage, posts, and labels
-- `lexicons/at/dholms`: board, post, position, label, and permission declarations
+- `lexicons/my`: board, post, position, label, and permission declarations
 
 The `local` environment uses a loopback OAuth client and the service DID
 `did:web:localhost%3A3000#bulletin`.

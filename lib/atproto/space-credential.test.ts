@@ -12,7 +12,7 @@ const AUTHORITY_PDS = "https://authority.example";
 const EXCHANGE_URL =
   `${AUTHORITY_PDS}/xrpc/com.atproto.space.getSpaceCredential`;
 const SPACE =
-  "at://did:plc:owner/space/at.dholms.bulletin.board/self";
+  "at://did:plc:owner/space/my.bulletin.board/self";
 const DELEGATION_TOKEN = "delegation-token";
 
 test("credential exchange binds through a DPoP proof", async () => {

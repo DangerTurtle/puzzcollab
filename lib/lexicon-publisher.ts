@@ -64,7 +64,7 @@ export async function publishLexicons(): Promise<void> {
   });
   const accessJwt = String(login.accessJwt);
   const did = String(login.did);
-  const docs = await loadLexicons(join(process.cwd(), "lexicons", "at", "dholms"));
+  const docs = await loadLexicons(join(process.cwd(), "lexicons", "my"));
 
   for (const doc of docs) {
     const existingUrl = new URL(

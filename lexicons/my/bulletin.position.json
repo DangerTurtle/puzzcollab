@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "at.dholms.bulletin.position",
+  "id": "my.bulletin.position",
   "defs": {
     "main": {
       "type": "record",

@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "at.dholms.bulletin.board",
+  "id": "my.bulletin.board",
   "defs": {
     "main": {
       "type": "space",
@@ -8,9 +8,9 @@
       "name": "Bulletin Board",
       "description": "A personal board where followers can read and post notes.",
       "collections": [
-        "at.dholms.bulletin.post",
-        "at.dholms.bulletin.label",
-        "at.dholms.bulletin.position"
+        "my.bulletin.post",
+        "my.bulletin.label",
+        "my.bulletin.position"
       ]
     }
   }

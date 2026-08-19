@@ -4,7 +4,7 @@ import { POST_COLLECTION } from "../config";
 import { parseChange } from "./engine";
 
 test("removes a stale post when a replacement value is malformed", () => {
-  const space = "at://did:plc:owner/space/at.dholms.bulletin.board/self";
+  const space = "at://did:plc:owner/space/my.bulletin.board/self";
   const repoDid = "did:plc:writer";
   assert.deepEqual(
     parseChange({

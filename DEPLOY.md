@@ -9,7 +9,7 @@ Create a dedicated AT Protocol account for the Lexicons and make an app
 password for it. Add this DNS record:
 
 ```text
-_lexicon.bulletin.dholms.at  TXT  "did=YOUR_AUTHORITY_DID"
+_lexicon.bulletin.my  TXT  "did=YOUR_AUTHORITY_DID"
 ```
 
 Wait for DNS to resolve, then run this once from your computer:
@@ -22,7 +22,7 @@ pnpm install
 pnpm publish-lexicons
 ```
 
-This publishes the five `at.dholms.bulletin.*` files in `lexicons/`. Run the
+This publishes the five `my.bulletin.*` files in `lexicons/`. Run the
 last command again whenever a Lexicon changes.
 
 ## 2. Check the build
@@ -43,7 +43,7 @@ checkout.
 2. In Railway, create a project from that GitHub repository. Railway will use
    the included `Dockerfile`; no custom build or start command is needed.
 3. Add a persistent volume mounted at `/data`.
-4. Add `bulletin.dholms.at` as the custom domain, set its target port to
+4. Add `bulletin.my` as the custom domain, set its target port to
    **3000**, and create the DNS record Railway shows you. Port 3001 is only
    used by the loopback sync listener inside the same application process.
 5. `env/production.env` provides the public URLs, DIDs, production
@@ -60,9 +60,9 @@ SQLite database.
 After deployment, these should all return `200`:
 
 ```sh
-curl https://bulletin.dholms.at/.well-known/did.json
-curl https://bulletin.dholms.at/oauth-client-metadata.json
-curl https://bulletin.dholms.at/sync/health
+curl https://bulletin.my/.well-known/did.json
+curl https://bulletin.my/oauth-client-metadata.json
+curl https://bulletin.my/sync/health
 ```
 
 Then sign in and create your board. Back up the Railway volume periodically;

@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "at.dholms.bulletin.permissions",
+  "id": "my.bulletin.permissions",
   "defs": {
     "main": {
       "type": "permission-set",
@@ -10,13 +10,13 @@
         {
           "type": "permission",
           "resource": "space",
-          "spaceType": "at.dholms.bulletin.board",
+          "spaceType": "my.bulletin.board",
           "authority": "*",
           "skey": "self",
           "collection": [
-            "at.dholms.bulletin.post",
-            "at.dholms.bulletin.label",
-            "at.dholms.bulletin.position"
+            "my.bulletin.post",
+            "my.bulletin.label",
+            "my.bulletin.position"
           ],
           "action": ["read", "create", "update", "delete"],
           "manage": ["create", "update", "delete"]

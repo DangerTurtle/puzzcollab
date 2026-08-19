@@ -1,8 +1,8 @@
-export const SPACE_TYPE = "at.dholms.bulletin.board";
-export const POST_COLLECTION = "at.dholms.bulletin.post";
-export const LABEL_COLLECTION = "at.dholms.bulletin.label";
-export const POSITION_COLLECTION = "at.dholms.bulletin.position";
-export const BULLETIN_PERMISSION_SET = "at.dholms.bulletin.permissions";
+export const SPACE_TYPE = "my.bulletin.board";
+export const POST_COLLECTION = "my.bulletin.post";
+export const LABEL_COLLECTION = "my.bulletin.label";
+export const POSITION_COLLECTION = "my.bulletin.position";
+export const BULLETIN_PERMISSION_SET = "my.bulletin.permissions";
 export const BOARD_SKEY = "self";
 
 export const OAUTH_SCOPE = [
