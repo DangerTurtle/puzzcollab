@@ -7,7 +7,7 @@
     "dev": "node --env-file=env/dev.env --import tsx scripts/run.ts",
     "dev:local": "node --env-file=env/local.env --import tsx scripts/run.ts",
     "build": "pnpm codegen:lex && next build --webpack",
-    "start": "node --env-file=env/production.env --import tsx scripts/run.ts",
+    "start": "node --import tsx scripts/run.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test",

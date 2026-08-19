@@ -10,10 +10,9 @@ async function readEnv(
   return parseEnv(await readFile(`env/${name}.env`, "utf8"));
 }
 
-test("local, dev, and production envs configure distinct behavior", async () => {
+test("local and dev envs configure distinct behavior", async () => {
   const local = readConfig(await readEnv("local"));
   const dev = readConfig(await readEnv("dev"));
-  const production = readConfig(await readEnv("production"));
 
   assert.equal(local.development, true);
   assert.equal(local.publishLexicons, true);
@@ -27,9 +26,6 @@ test("local, dev, and production envs configure distinct behavior", async () => 
   assert.equal(dev.managingAppService, "did:web:bulletin.my#bulletin");
   assert.equal(dev.bskyUrl, "https://public.api.bsky.app");
 
-  assert.equal(production.development, false);
-  assert.equal(production.publishLexicons, false);
-  assert.equal(production.databasePath, "/data/bulletin.db");
 });
 
 test("config validation rejects invalid values", async () => {

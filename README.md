@@ -71,8 +71,9 @@ Bulletin has three environments, all run by the same application entry point:
 | `dev` | `pnpm dev` | Local development against Atmosphere |
 | `production` | `pnpm start` | Built application on Railway |
 
-Each command loads one self-contained file: `env/local.env`, `env/dev.env`, or
-`env/production.env`. Shell and deployment variables take precedence.
+The local commands load `env/local.env` or `env/dev.env`. Production
+configuration is supplied through deployment environment variables rather
+than a checked-in env file; see [DEPLOY.md](./DEPLOY.md) for the complete list.
 
 ## Key pieces
 

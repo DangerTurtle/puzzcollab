@@ -46,13 +46,26 @@ checkout.
 4. Add `bulletin.my` as the custom domain, set its target port to
    **3000**, and create the DNS record Railway shows you. Port 3001 is only
    used by the loopback sync listener inside the same application process.
-5. `env/production.env` provides the public URLs, DIDs, production
-   resolvers, loopback sync URL, and `/data/bulletin.db` database path. Add
-   Railway variables only when overriding those defaults. For example:
+5. Add these variables to the Railway service. Production configuration is
+   intentionally not stored in a checked-in env file:
 
 ```text
+BULLETIN_HOST=0.0.0.0
+BULLETIN_PORT=3000
+PUBLISH_LEXICONS=false
+MANAGING_APP_PUBLIC_URL=https://bulletin.my
+UI_PUBLIC_URL=https://bulletin.my
 DATABASE_PATH=/data/bulletin.db
+SYNC_INTERNAL_URL=http://127.0.0.1:3001
+MANAGING_APP_DID=did:web:bulletin.my
+PLC_URL=https://plc.directory
+BSKY_URL=https://public.api.bsky.app
 ```
+
+The Docker image sets `NODE_ENV=production`. Blob files default to
+`/data/bulletin-blobs` because they are stored beside `DATABASE_PATH`; set
+`BLOB_DIRECTORY` explicitly only if you need a different location. Replace
+the `bulletin.my` values if deploying under another domain.
 
 Keep the service at **one replica** because the app and sync worker share one
 SQLite database.
