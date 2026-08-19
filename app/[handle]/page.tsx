@@ -31,7 +31,13 @@ export default async function BoardPage({
   const session = await getSession();
   const ownerDid = await resolveHandle(handle);
   if (!ownerDid) {
-    return <BoardNotFound viewerDid={session?.did} />;
+    return (
+      <BoardMissing
+        viewerDid={session?.did}
+        ownerHandle={handle}
+        avatar={null}
+      />
+    );
   }
   await cacheIdentity(ownerDid).catch(() => undefined);
   const ownBoard = session?.did === ownerDid;
@@ -102,22 +108,13 @@ export default async function BoardPage({
         );
       }
       return (
-        <main className="shell board-page">
-          <Header did={session.did} />
-          <section className="board-head">
-            <BoardTitle
-              ownerHandle={restrictedHandle}
-              avatar={restrictedProfile?.avatar}
-            />
-          </section>
-          <div className="board-layout">
-            <div className="spatial-board-wrap">
-              <div className="spatial-board" aria-label="Followers-only board">
-                <div className="note restricted-board-note">followers only</div>
-              </div>
-            </div>
-          </div>
-        </main>
+        <BoardNotice
+          viewerDid={session.did}
+          ownerHandle={restrictedHandle}
+          avatar={restrictedProfile?.avatar}
+          message="followers only"
+          boardLabel="Followers-only board"
+        />
       );
     }
   }
@@ -269,31 +266,46 @@ function BoardMissing({
   ownerHandle,
   avatar,
 }: {
-  viewerDid: string;
+  viewerDid?: string;
   ownerHandle: string | null | undefined;
   avatar: string | null | undefined;
 }) {
   return (
-    <main className="shell">
+    <BoardNotice
+      viewerDid={viewerDid}
+      ownerHandle={ownerHandle}
+      avatar={avatar}
+      message="this bulletin doesn’t exist"
+      boardLabel="Missing bulletin"
+    />
+  );
+}
+
+function BoardNotice({
+  viewerDid,
+  ownerHandle,
+  avatar,
+  message,
+  boardLabel,
+}: {
+  viewerDid?: string;
+  ownerHandle: string | null | undefined;
+  avatar: string | null | undefined;
+  message: string;
+  boardLabel: string;
+}) {
+  return (
+    <main className="shell board-page">
       <Header did={viewerDid} />
       <section className="board-head">
         <BoardTitle ownerHandle={ownerHandle} avatar={avatar} />
       </section>
-      <div className="gate">
-        <h1 className="gate-title">this bulletin doesn’t exist</h1>
-        <p>{ownerHandle ? `@${ownerHandle}` : "this person"} hasn’t put one up</p>
-      </div>
-    </main>
-  );
-}
-
-function BoardNotFound({ viewerDid }: { viewerDid?: string }) {
-  return (
-    <main className="shell">
-      <Header did={viewerDid} />
-      <div className="gate">
-        <h1 className="gate-title">no bulletin here</h1>
-        <p>check the handle and try again</p>
+      <div className="board-layout">
+        <div className="spatial-board-wrap">
+          <div className="spatial-board" aria-label={boardLabel}>
+            <div className="note board-state-note">{message}</div>
+          </div>
+        </div>
       </div>
     </main>
   );
