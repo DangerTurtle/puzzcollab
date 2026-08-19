@@ -1,4 +1,4 @@
-import { sql, type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import {
   Migrator,
   type Migration,
@@ -9,13 +9,12 @@ import type { DatabaseSchema } from "./schema";
 
 export const INITIAL_MIGRATION_NAME = "001_initial";
 
-const LEGACY_MIGRATION_COUNT = 11;
 const APPLICATION_TABLES = [
   "account",
   "auth_session",
   "auth_state",
   "board",
-  "moderation_label",
+  "removal",
   "note_position",
   "post",
   "space_blob",
@@ -29,11 +28,6 @@ const initialMigration: Migration = {
     const tables = new Set(
       (await db.introspection.getTables()).map(({ name }) => name),
     );
-
-    if (tables.has("migration")) {
-      await adoptLegacySchema(db);
-      return;
-    }
 
     const existingTables = APPLICATION_TABLES.filter((table) =>
       tables.has(table),
@@ -70,32 +64,6 @@ export async function migrateDatabase(
   const migrator = new Migrator({ db, provider: migrationProvider });
   const { error } = await migrator.migrateToLatest();
   if (error) throw new Error("Database migration failed", { cause: error });
-}
-
-async function adoptLegacySchema(db: Kysely<unknown>): Promise<void> {
-  const result = await sql<{
-    count: number;
-    minVersion: number | null;
-    maxVersion: number | null;
-  }>`
-    SELECT
-      count(*) AS count,
-      min(version) AS minVersion,
-      max(version) AS maxVersion
-    FROM migration
-  `.execute(db);
-  const summary = result.rows[0];
-  if (
-    !summary ||
-    summary.count !== LEGACY_MIGRATION_COUNT ||
-    summary.minVersion !== 1 ||
-    summary.maxVersion !== LEGACY_MIGRATION_COUNT
-  ) {
-    throw new Error(
-      `Legacy database must be migrated through version ${LEGACY_MIGRATION_COUNT} before upgrading`,
-    );
-  }
-  await db.schema.dropTable("migration").execute();
 }
 
 async function createInitialSchema(db: Kysely<unknown>): Promise<void> {
@@ -150,26 +118,7 @@ async function createInitialSchema(db: Kysely<unknown>): Promise<void> {
     .columns(["spaceUri", "createdAt desc"])
     .execute();
 
-  await db.schema
-    .createTable("moderationLabel")
-    .addColumn("uri", "text", (column) => column.primaryKey())
-    .addColumn("cid", "text", (column) => column.notNull())
-    .addColumn("spaceUri", "text", (column) => column.notNull())
-    .addColumn("authorDid", "text", (column) => column.notNull())
-    .addColumn("subjectUri", "text", (column) => column.notNull())
-    .addColumn("subjectCid", "text")
-    .addColumn("val", "text", (column) => column.notNull())
-    .addColumn("neg", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
-    .addColumn("createdAt", "text", (column) => column.notNull())
-    .addColumn("indexedAt", "text", (column) => column.notNull())
-    .execute();
-  await db.schema
-    .createIndex("labelSubjectCreatedIdx")
-    .on("moderationLabel")
-    .columns(["spaceUri", "subjectUri", "createdAt desc"])
-    .execute();
+  await createRemovalTable(db);
 
   await db.schema
     .createTable("notePosition")
@@ -237,5 +186,24 @@ async function createInitialSchema(db: Kysely<unknown>): Promise<void> {
     .createIndex("webSessionDidIdx")
     .on("webSession")
     .column("did")
+    .execute();
+}
+
+async function createRemovalTable(db: Kysely<unknown>): Promise<void> {
+  await db.schema
+    .createTable("removal")
+    .addColumn("uri", "text", (column) => column.primaryKey())
+    .addColumn("cid", "text", (column) => column.notNull())
+    .addColumn("spaceUri", "text", (column) => column.notNull())
+    .addColumn("authorDid", "text", (column) => column.notNull())
+    .addColumn("subjectUri", "text", (column) => column.notNull())
+    .addColumn("subjectCid", "text", (column) => column.notNull())
+    .addColumn("createdAt", "text", (column) => column.notNull())
+    .addColumn("indexedAt", "text", (column) => column.notNull())
+    .execute();
+  await db.schema
+    .createIndex("removalSubjectCreatedIdx")
+    .on("removal")
+    .columns(["spaceUri", "subjectUri", "createdAt desc"])
     .execute();
 }

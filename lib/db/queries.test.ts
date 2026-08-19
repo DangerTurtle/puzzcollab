@@ -18,7 +18,7 @@ const {
   saveBoard,
   saveSpaceWatch,
   saveSyncedRepo,
-  upsertLabel,
+  upsertRemoval,
   upsertPosition,
   upsertPost,
 } = await import("./queries");
@@ -85,15 +85,13 @@ test("board materialization applies owner moderation and positioning", async () 
     y: 40,
     createdAt,
   });
-  await upsertLabel({
-    uri: `${spaceUri}/did:plc:owner/example.label/one`,
-    cid: "label-cid",
+  await upsertRemoval({
+    uri: `${spaceUri}/did:plc:owner/example.removal/one`,
+    cid: "removal-cid",
     spaceUri,
     authorDid: "did:plc:owner",
     subjectUri: postUri,
     subjectCid: "post-cid",
-    val: "hide",
-    neg: false,
     createdAt,
   });
 

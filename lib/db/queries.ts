@@ -74,15 +74,13 @@ type PostInput = {
   createdAt: string;
 };
 
-type LabelInput = {
+type RemovalInput = {
   uri: string;
   cid: string;
   spaceUri: string;
   authorDid: string;
   subjectUri: string;
-  subjectCid?: string;
-  val: string;
-  neg: boolean;
+  subjectCid: string;
   createdAt: string;
 };
 
@@ -228,7 +226,7 @@ export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
       .where("spaceUri", "=", spaceUri)
       .execute();
     await trx
-      .deleteFrom("moderationLabel")
+      .deleteFrom("removal")
       .where("spaceUri", "=", spaceUri)
       .execute();
     await trx.deleteFrom("post").where("spaceUri", "=", spaceUri).execute();
@@ -338,7 +336,7 @@ export async function deleteSyncedReposExcept(
         .where("authorDid", "=", repoDid)
         .execute();
       await trx
-        .deleteFrom("moderationLabel")
+        .deleteFrom("removal")
         .where("spaceUri", "=", spaceUri)
         .where("authorDid", "=", repoDid)
         .execute();
@@ -363,7 +361,7 @@ export async function replaceRepoRecords(input: {
   spaceUri: string;
   authorDid: string;
   posts: Array<Omit<PostInput, "spaceUri" | "authorDid">>;
-  labels: Array<Omit<LabelInput, "spaceUri" | "authorDid">>;
+  removals: Array<Omit<RemovalInput, "spaceUri" | "authorDid">>;
   positions: Array<Omit<PositionInput, "spaceUri" | "authorDid">>;
   blobs?: SpaceBlob[];
 }): Promise<void> {
@@ -376,7 +374,7 @@ export async function replaceRepoRecords(input: {
       .where("authorDid", "=", input.authorDid)
       .execute();
     await trx
-      .deleteFrom("moderationLabel")
+      .deleteFrom("removal")
       .where("spaceUri", "=", input.spaceUri)
       .where("authorDid", "=", input.authorDid)
       .execute();
@@ -403,14 +401,14 @@ export async function replaceRepoRecords(input: {
         )
         .execute();
     }
-    if (input.labels.length > 0) {
+    if (input.removals.length > 0) {
       await trx
-        .insertInto("moderationLabel")
+        .insertInto("removal")
         .values(
-          input.labels.map((label) =>
-            labelValues(
+          input.removals.map((removal) =>
+            removalValues(
               {
-                ...label,
+                ...removal,
                 spaceUri: input.spaceUri,
                 authorDid: input.authorDid,
               },
@@ -490,13 +488,13 @@ export async function upsertPosition(input: PositionInput): Promise<void> {
 export type SyncedChange =
   | {
       kind: "delete";
-      table: "post" | "moderation_label" | "note_position";
+      table: "post" | "removal" | "note_position";
       uri: string;
       spaceUri: string;
       authorDid: string;
     }
   | { kind: "post"; value: PostInput }
-  | { kind: "label"; value: LabelInput }
+  | { kind: "removal"; value: RemovalInput }
   | { kind: "position"; value: PositionInput };
 
 type SyncedDeleteTable = Extract<
@@ -516,8 +514,8 @@ export async function applySyncedChanges(
         await deleteSyncedRecord(trx, change.table, change.uri);
       } else if (change.kind === "post") {
         await upsertPostWith(trx, change.value);
-      } else if (change.kind === "label") {
-        await upsertLabelWith(trx, change.value);
+      } else if (change.kind === "removal") {
+        await upsertRemovalWith(trx, change.value);
       } else {
         await upsertPositionWith(trx, change.value);
       }
@@ -549,8 +547,8 @@ export async function applySyncedChanges(
   await deleteUnreferencedBlobFiles(db, dereferenced);
 }
 
-export async function upsertLabel(input: LabelInput): Promise<void> {
-  await upsertLabelWith(getQueryDb(), input);
+export async function upsertRemoval(input: RemovalInput): Promise<void> {
+  await upsertRemovalWith(getQueryDb(), input);
 }
 
 type BoardPostRow = Omit<BoardPost, "hidden" | "color" | "rotation"> & {
@@ -582,16 +580,13 @@ export async function listBoardPosts(
       COALESCE(np.x, p.x) AS x,
       COALESCE(np.y, p.y) AS y,
       p.created_at AS createdAt,
-      COALESCE((
-        SELECT CASE WHEN l.neg = 0 THEN 1 ELSE 0 END
-        FROM moderation_label l
-        WHERE l.space_uri = p.space_uri
-          AND l.author_did = ${authorityDid}
-          AND l.subject_uri = p.uri
-          AND l.val = 'hide'
-        ORDER BY l.created_at DESC, l.uri DESC
-        LIMIT 1
-      ), 0) AS hidden
+      EXISTS (
+        SELECT 1
+        FROM removal r
+        WHERE r.space_uri = p.space_uri
+          AND r.author_did = ${authorityDid}
+          AND r.subject_uri = p.uri
+      ) AS hidden
     FROM post p
     LEFT JOIN account a ON a.did = p.author_did
     LEFT JOIN note_position np ON np.uri = (
@@ -700,17 +695,19 @@ async function upsertPositionWith(
     .execute();
 }
 
-async function upsertLabelWith(
+async function upsertRemovalWith(
   db: DatabaseConnection,
-  input: LabelInput,
+  input: RemovalInput,
 ): Promise<void> {
   await db
-    .insertInto("moderationLabel")
-    .values(labelValues(input))
+    .insertInto("removal")
+    .values(removalValues(input))
     .onConflict((conflict) =>
       conflict.column("uri").doUpdateSet((eb) => ({
         cid: eb.ref("excluded.cid"),
-        neg: eb.ref("excluded.neg"),
+        subjectUri: eb.ref("excluded.subjectUri"),
+        subjectCid: eb.ref("excluded.subjectCid"),
+        createdAt: eb.ref("excluded.createdAt"),
         indexedAt: eb.ref("excluded.indexedAt"),
       })),
     )
@@ -724,8 +721,8 @@ async function deleteSyncedRecord(
 ): Promise<void> {
   if (table === "post") {
     await db.deleteFrom("post").where("uri", "=", uri).execute();
-  } else if (table === "moderation_label") {
-    await db.deleteFrom("moderationLabel").where("uri", "=", uri).execute();
+  } else if (table === "removal") {
+    await db.deleteFrom("removal").where("uri", "=", uri).execute();
   } else {
     await db.deleteFrom("notePosition").where("uri", "=", uri).execute();
   }
@@ -818,16 +815,17 @@ function postValues(input: PostInput, indexedAt = new Date().toISOString()) {
   };
 }
 
-function labelValues(input: LabelInput, indexedAt = new Date().toISOString()) {
+function removalValues(
+  input: RemovalInput,
+  indexedAt = new Date().toISOString(),
+) {
   return {
     uri: input.uri,
     cid: input.cid,
     spaceUri: input.spaceUri,
     authorDid: input.authorDid,
     subjectUri: input.subjectUri,
-    subjectCid: input.subjectCid ?? null,
-    val: input.val,
-    neg: input.neg ? 1 : 0,
+    subjectCid: input.subjectCid,
     createdAt: input.createdAt,
     indexedAt,
   };

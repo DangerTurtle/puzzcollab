@@ -15,7 +15,7 @@
           "skey": "self",
           "collection": [
             "my.bulletin.post",
-            "my.bulletin.label",
+            "my.bulletin.removal",
             "my.bulletin.position"
           ],
           "action": ["read", "create", "update", "delete"],

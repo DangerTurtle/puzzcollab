@@ -7,7 +7,7 @@ import {
   type SignedCommit,
 } from "@atproto/space";
 import {
-  LABEL_COLLECTION,
+  REMOVAL_COLLECTION,
   POSITION_COLLECTION,
   POST_COLLECTION,
   boardUri,
@@ -550,7 +550,7 @@ export class SyncEngine {
       { space, author: repoDid, didKey },
     );
     const posts: Parameters<typeof replaceRepoRecords>[0]["posts"] = [];
-    const labels: Parameters<typeof replaceRepoRecords>[0]["labels"] = [];
+    const removals: Parameters<typeof replaceRepoRecords>[0]["removals"] = [];
     const positions: Parameters<typeof replaceRepoRecords>[0]["positions"] = [];
     const postChanges: Extract<SyncedChange, { kind: "post" }>[] = [];
 
@@ -567,7 +567,9 @@ export class SyncEngine {
         postChanges.push(change);
         posts.push(stripPost(change.value));
       }
-      if (change?.kind === "label") labels.push(stripLabel(change.value));
+      if (change?.kind === "removal") {
+        removals.push(stripRemoval(change.value));
+      }
       if (change?.kind === "position") positions.push(stripPosition(change.value));
     }
 
@@ -577,7 +579,7 @@ export class SyncEngine {
       spaceUri: space,
       authorDid: repoDid,
       posts,
-      labels,
+      removals,
       positions,
       blobs: stripBlobBytes(blobs),
     });
@@ -817,13 +819,12 @@ export function parseChange(input: {
 
   const subject = parseSubject(value.subject);
   if (
-    input.collection === LABEL_COLLECTION &&
-    subject &&
-    typeof value.val === "string" &&
+    input.collection === REMOVAL_COLLECTION &&
+    subject?.cid &&
     createdAt
   ) {
     return {
-      kind: "label",
+      kind: "removal",
       value: {
         uri,
         cid: input.cid,
@@ -831,8 +832,6 @@ export function parseChange(input: {
         authorDid: input.repoDid,
         subjectUri: subject.uri,
         subjectCid: subject.cid,
-        val: value.val,
-        neg: value.neg === true,
         createdAt,
       },
     };
@@ -859,7 +858,7 @@ export function parseChange(input: {
       },
     };
   }
-  return undefined;
+  return deletion;
 }
 
 function parsePosition(value: unknown): { x: number; y: number } | undefined {
@@ -885,9 +884,9 @@ function parseSubject(value: unknown): { uri: string; cid?: string } | undefined
 
 function tableForCollection(
   collection: string,
-): "post" | "moderation_label" | "note_position" | undefined {
+): "post" | "removal" | "note_position" | undefined {
   if (collection === POST_COLLECTION) return "post";
-  if (collection === LABEL_COLLECTION) return "moderation_label";
+  if (collection === REMOVAL_COLLECTION) return "removal";
   if (collection === POSITION_COLLECTION) return "note_position";
   return undefined;
 }
@@ -934,14 +933,14 @@ function stripPost(value: Extract<SyncedChange, { kind: "post" }>["value"]) {
   };
 }
 
-function stripLabel(value: Extract<SyncedChange, { kind: "label" }>["value"]) {
+function stripRemoval(
+  value: Extract<SyncedChange, { kind: "removal" }>["value"],
+) {
   return {
     cid: value.cid,
     uri: value.uri,
     subjectUri: value.subjectUri,
     subjectCid: value.subjectCid,
-    val: value.val,
-    neg: value.neg,
     createdAt: value.createdAt,
   };
 }

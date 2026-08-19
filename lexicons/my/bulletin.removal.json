@@ -1,26 +1,18 @@
 {
   "lexicon": 1,
-  "id": "my.bulletin.label",
+  "id": "my.bulletin.removal",
   "defs": {
     "main": {
       "type": "record",
       "key": "tid",
-      "description": "An authority-authored moderation label kept inside the board's access boundary.",
+      "description": "An authority-authored removal of a note from a board.",
       "record": {
         "type": "object",
-        "required": ["subject", "val", "createdAt"],
+        "required": ["subject", "createdAt"],
         "properties": {
           "subject": {
             "type": "ref",
             "ref": "com.atproto.repo.strongRef"
-          },
-          "val": {
-            "type": "string",
-            "knownValues": ["hide"],
-            "maxLength": 128
-          },
-          "neg": {
-            "type": "boolean"
           },
           "createdAt": {
             "type": "string",

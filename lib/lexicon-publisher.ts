@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { getConfig } from "./config";
 
 const LEXICON_COLLECTION = "com.atproto.lexicon.schema";
+const RETIRED_LEXICONS = [
+  { id: "my.bulletin.label", replacement: "my.bulletin.removal" },
+] as const;
 
 type LexiconDoc = {
   lexicon: number;
@@ -66,6 +69,14 @@ export async function publishLexicons(): Promise<void> {
   const did = String(login.did);
   const docs = await loadLexicons(join(process.cwd(), "lexicons", "my"));
 
+  for (const retired of RETIRED_LEXICONS) {
+    if (!docs.some(({ id }) => id === retired.replacement)) {
+      throw new Error(
+        `Refusing to delete ${retired.id} without ${retired.replacement}`,
+      );
+    }
+  }
+
   for (const doc of docs) {
     const existingUrl = new URL(
       `${authority.pds}/xrpc/com.atproto.repo.getRecord`,
@@ -99,6 +110,60 @@ export async function publishLexicons(): Promise<void> {
     });
     console.log(`published lexicon: ${doc.id}`);
   }
+
+  for (const retired of RETIRED_LEXICONS) {
+    await deleteLexiconIfPresent(authority.pds, did, accessJwt, retired.id);
+  }
+}
+
+async function deleteLexiconIfPresent(
+  pds: string,
+  did: string,
+  accessJwt: string,
+  id: string,
+): Promise<void> {
+  const existingUrl = new URL(`${pds}/xrpc/com.atproto.repo.getRecord`);
+  existingUrl.searchParams.set("repo", did);
+  existingUrl.searchParams.set("collection", LEXICON_COLLECTION);
+  existingUrl.searchParams.set("rkey", id);
+  const existingResponse = await fetch(existingUrl, {
+    headers: { authorization: `Bearer ${accessJwt}` },
+  });
+  if (!existingResponse.ok) {
+    const body = (await existingResponse
+      .clone()
+      .json()
+      .catch(() => undefined)) as { error?: unknown } | undefined;
+    if (
+      existingResponse.status === 404 ||
+      (existingResponse.status === 400 && body?.error === "RecordNotFound")
+    ) {
+      return;
+    }
+    throw new Error(
+      `${existingUrl} failed (${existingResponse.status}): ${await existingResponse.text()}`,
+    );
+  }
+
+  const deleteUrl = `${pds}/xrpc/com.atproto.repo.deleteRecord`;
+  const deleteResponse = await fetch(deleteUrl, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessJwt}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      repo: did,
+      collection: LEXICON_COLLECTION,
+      rkey: id,
+    }),
+  });
+  if (!deleteResponse.ok) {
+    throw new Error(
+      `${deleteUrl} failed (${deleteResponse.status}): ${await deleteResponse.text()}`,
+    );
+  }
+  console.log(`deleted retired lexicon: ${id}`);
 }
 
 async function getAuthority(): Promise<Authority> {

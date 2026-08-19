@@ -17,14 +17,13 @@ export function ModerationButton(props: {
       aria-label={props.ownNote ? "Delete your note" : "Remove note from board"}
       onClick={async () => {
         setBusy(true);
-        const response = await fetch(props.ownNote ? "/api/posts" : "/api/labels", {
+        const response = await fetch(props.ownNote ? "/api/posts" : "/api/removals", {
           method: props.ownNote ? "DELETE" : "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ownerDid: props.ownerDid,
             postUri: props.postUri,
             postCid: props.postCid,
-            ...(!props.ownNote && { hidden: true }),
           }),
         });
         if (response.ok) window.location.reload();

@@ -1,4 +1,4 @@
-import { labelPost } from "@/lib/atproto/actions";
+import { removePostFromBoard } from "@/lib/atproto/actions";
 import { requireSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -10,22 +10,20 @@ export async function POST(request: NextRequest) {
       ownerDid?: string;
       postUri?: string;
       postCid?: string;
-      hidden?: boolean;
     };
     if (!body.ownerDid || !body.postUri || !body.postCid) {
-      throw new Error("Invalid label target");
+      throw new Error("Invalid removal target");
     }
-    const uri = await labelPost(await requireSession(), {
+    const uri = await removePostFromBoard(await requireSession(), {
       ownerDid: body.ownerDid,
       postUri: body.postUri,
       postCid: body.postCid,
-      hidden: body.hidden === true,
     });
     return NextResponse.json({ uri });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "Could not update this note right now" },
+      { error: "Could not remove this note right now" },
       { status: 400 },
     );
   }

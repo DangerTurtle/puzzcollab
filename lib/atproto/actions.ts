@@ -2,7 +2,7 @@ import { Client } from "@atproto/lex-client";
 import { asStringFormat } from "@atproto/lex-schema";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
-  LABEL_COLLECTION,
+  REMOVAL_COLLECTION,
   POSITION_COLLECTION,
   POST_COLLECTION,
   SPACE_TYPE,
@@ -15,7 +15,7 @@ import {
   getPost,
   hasBoard,
   saveBoard,
-  upsertLabel,
+  upsertRemoval,
   upsertPost,
   upsertPosition,
 } from "../db/queries";
@@ -245,13 +245,12 @@ export async function deleteOwnPost(
   await deleteStoredPost(post.uri);
 }
 
-export async function labelPost(
+export async function removePostFromBoard(
   session: OAuthSession,
   input: {
     ownerDid: string;
     postUri: string;
     postCid: string;
-    hidden: boolean;
   },
 ): Promise<string> {
   if (session.did !== input.ownerDid) {
@@ -263,25 +262,21 @@ export async function labelPost(
   const result = await client.call(com.atproto.space.createRecord, {
     space,
     repo: session.did,
-    collection: LABEL_COLLECTION,
+    collection: REMOVAL_COLLECTION,
     validate: false,
     record: {
-      $type: LABEL_COLLECTION,
+      $type: REMOVAL_COLLECTION,
       subject: { uri: input.postUri, cid: input.postCid },
-      val: "hide",
-      neg: !input.hidden,
       createdAt,
     },
   });
-  await upsertLabel({
+  await upsertRemoval({
     uri: result.uri,
     cid: result.cid,
     spaceUri: space,
     authorDid: session.did,
     subjectUri: input.postUri,
     subjectCid: input.postCid,
-    val: "hide",
-    neg: !input.hidden,
     createdAt,
   });
   return result.uri;

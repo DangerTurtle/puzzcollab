@@ -36,15 +36,13 @@ export type DatabaseSchema = {
     createdAt: string;
     indexedAt: string;
   };
-  moderationLabel: {
+  removal: {
     uri: string;
     cid: string;
     spaceUri: string;
     authorDid: string;
     subjectUri: string;
-    subjectCid: string | null;
-    val: string;
-    neg: number;
+    subjectCid: string;
     createdAt: string;
     indexedAt: string;
   };

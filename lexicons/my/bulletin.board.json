@@ -9,7 +9,7 @@
       "description": "A personal board where followers can read and post notes.",
       "collections": [
         "my.bulletin.post",
-        "my.bulletin.label",
+        "my.bulletin.removal",
         "my.bulletin.position"
       ]
     }
