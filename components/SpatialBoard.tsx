@@ -1,6 +1,7 @@
 "use client";
 
 import type { BoardPost } from "@/lib/db/queries";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { BOARD_COORDINATE_MAX } from "@/lib/note-constraints";
@@ -81,7 +82,12 @@ export function SpatialBoard({
   }
 
   function startDrag(event: PointerEvent<HTMLElement>, post: SpatialPost) {
-    if (!canMove(post) || (event.target as HTMLElement).closest("button")) return;
+    if (
+      !canMove(post) ||
+      (event.target as HTMLElement).closest("button, a")
+    ) {
+      return;
+    }
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
@@ -213,10 +219,10 @@ export function SpatialBoard({
                 {post.hidden && (
                   <div className="note-visibility">Removed from board</div>
                 )}
-                <div
+                <Link
                   className="note-avatar"
-                  aria-label={`Written by ${author} on ${post.displayDate}`}
-                  tabIndex={0}
+                  href={authorBoardHref(post)}
+                  aria-label={`Visit ${author}'s board. Written on ${post.displayDate}`}
                 >
                   {post.authorAvatar ? (
                     // Profile blobs come from arbitrary member PDS hosts.
@@ -229,7 +235,7 @@ export function SpatialBoard({
                     <strong>{author}</strong>
                     <span>{post.displayDate}</span>
                   </span>
-                </div>
+                </Link>
                 {(viewerDid === ownerDid || viewerDid === post.authorDid) && (
                   <ModerationButton
                     ownerDid={ownerDid}
@@ -266,6 +272,13 @@ function clampPosition(value: number): number {
 
 function avatarLetter(handle: string | null): string {
   return (handle?.replace(/^@/, "")[0] ?? "?").toUpperCase();
+}
+
+function authorBoardHref(post: SpatialPost): string {
+  const handle = post.authorHandle?.replace(/^@/, "");
+  return handle
+    ? `/${encodeURIComponent(handle)}`
+    : `/board/${encodeURIComponent(post.authorDid)}`;
 }
 
 function noteImageUrl(post: SpatialPost): string {
