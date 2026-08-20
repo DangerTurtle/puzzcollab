@@ -43,12 +43,18 @@ export function SpatialBoard({
   canWrite: boolean;
 }) {
   const [posts, setPosts] = useState(initialPosts);
+  const [lastInitialPosts, setLastInitialPosts] = useState(initialPosts);
   const [activeUri, setActiveUri] = useState<string>();
   const [error, setError] = useState<string>();
   const [composer, setComposer] = useState<ComposerState>();
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | undefined>(undefined);
   const router = useRouter();
+
+  if (initialPosts !== lastInitialPosts) {
+    setLastInitialPosts(initialPosts);
+    setPosts(initialPosts);
+  }
 
   useEffect(() => {
     const events = new EventSource(

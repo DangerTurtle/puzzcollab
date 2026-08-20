@@ -198,12 +198,7 @@ export default async function BoardPage({
       </section>
       <div className="board-layout">
         <SpatialBoard
-          key={displayedPosts
-            .map(
-              (post) =>
-                `${post.cid}:${post.x}:${post.y}:${post.color}:${post.rotation}:${post.imageCid}:${post.hidden}`,
-            )
-            .join("|")}
+          key={ownerDid}
           initialPosts={displayedPosts.map((post) => ({
             ...post,
             authorHandle:
