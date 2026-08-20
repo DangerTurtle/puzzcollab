@@ -45,7 +45,6 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: inherit; }
   color: var(--red); font-size: 25px;
   letter-spacing: -.045em; text-decoration: none;
 }
-.topbar-primary { display: flex; align-items: baseline; gap: 18px; }
 .topbar-link {
   color: var(--muted); font-size: 12px; text-decoration: none;
   text-underline-offset: 3px;

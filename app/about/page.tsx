@@ -13,7 +13,7 @@ export default async function AboutPage() {
   return (
     <main className="shell about-page">
       <div className="about-header">
-        <Header did={session?.did} showAbout={false} />
+        <Header did={session?.did} showAbout={false} showSearch={false} />
       </div>
       <article className="about-content">
         <h1>
@@ -23,10 +23,11 @@ export default async function AboutPage() {
         <section>
           <h2>How it works</h2>
           <p>
-            Every user on a spaces-compatible PDS can create one bulletin board.
-            This is represented as a space with their DID as the authority. Only
-            their followers can read it, and only mutuals can leave notes. The
-            board owner can rearrange notes or remove them.
+            Every user on a spaces-compatible PDS can create a personal bulletin
+            board, represented as a space with their DID as the authority. Read
+            and write access are informed by Bluesky follows. Only a user&apos;s
+            followers can read their board, and only mutuals can leave notes.
+            The board owner can rearrange notes or remove them.
           </p>
         </section>
 
