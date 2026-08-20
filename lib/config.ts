@@ -82,7 +82,7 @@ export function readConfig(
     ),
     bskyUrl: absoluteUrl(
       "BSKY_URL",
-      environment.BSKY_URL ?? "https://public.api.bsky.app",
+      environment.BSKY_URL ?? "https://api.bsky.app",
     ),
     managingAppDid,
     managingAppService: `${managingAppDid}#bulletin`,

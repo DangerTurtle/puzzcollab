@@ -59,7 +59,7 @@ DATABASE_PATH=/data/bulletin.db
 SYNC_INTERNAL_URL=http://127.0.0.1:3001
 MANAGING_APP_DID=did:web:bulletin.my
 PLC_URL=https://plc.directory
-BSKY_URL=https://public.api.bsky.app
+BSKY_URL=https://api.bsky.app
 ```
 
 The Docker image sets `NODE_ENV=production`. Blob files default to

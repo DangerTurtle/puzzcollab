@@ -17,14 +17,14 @@ test("local and dev envs configure distinct behavior", async () => {
   assert.equal(local.development, true);
   assert.equal(local.publishLexicons, true);
   assert.equal(local.databasePath, "bulletin.db");
-  assert.equal(local.bskyUrl, "https://public.api.bsky.app");
+  assert.equal(local.bskyUrl, "https://api.bsky.app");
 
   assert.equal(dev.development, true);
   assert.equal(dev.publishLexicons, false);
   assert.equal(dev.databasePath, "bulletin-dev.db");
   assert.equal(dev.syncPollInterval, 10000);
   assert.equal(dev.managingAppService, "did:web:bulletin.my#bulletin");
-  assert.equal(dev.bskyUrl, "https://public.api.bsky.app");
+  assert.equal(dev.bskyUrl, "https://api.bsky.app");
 
 });
 
