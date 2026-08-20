@@ -2,6 +2,7 @@ import { LoginForm } from "@/components/LoginForm";
 import { getSession } from "@/lib/auth/session";
 import { cacheIdentity } from "@/lib/atproto/identity";
 import { getAccount } from "@/lib/db/queries";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,11 @@ export default async function Home() {
             create your <span>bulletin</span>
           </h1>
           <LoginForm />
+          <div className="home-about-row">
+            <Link className="topbar-link" href="/about">
+              about
+            </Link>
+          </div>
         </div>
 
         <ul className="home-feature-notes" aria-label="What Bulletin does">
