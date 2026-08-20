@@ -294,6 +294,7 @@ textarea.field { resize: vertical; min-height: 108px; line-height: 1.45; }
   width: clamp(150px, 32%, 205px);
   max-height: 385px;
   overflow: visible;
+  cursor: default;
   user-select: none;
   transform-origin: 50% 8px;
 }
