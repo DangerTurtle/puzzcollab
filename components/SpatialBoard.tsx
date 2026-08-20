@@ -64,6 +64,28 @@ export function SpatialBoard({
     return () => events.close();
   }, [ownerDid, router]);
 
+  useEffect(() => {
+    if (!composer) return;
+
+    function dismissOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setComposer(undefined);
+    }
+
+    function dismissOutsideBoard(event: Event) {
+      const target = event.target;
+      if (target instanceof Node && !boardRef.current?.contains(target)) {
+        setComposer(undefined);
+      }
+    }
+
+    window.addEventListener("keydown", dismissOnEscape);
+    document.addEventListener("pointerdown", dismissOutsideBoard);
+    return () => {
+      window.removeEventListener("keydown", dismissOnEscape);
+      document.removeEventListener("pointerdown", dismissOutsideBoard);
+    };
+  }, [composer]);
+
   function canMove(post: SpatialPost): boolean {
     return viewerDid === ownerDid || viewerDid === post.authorDid;
   }
@@ -85,6 +107,14 @@ export function SpatialBoard({
       left: Math.min(Math.max(12, localX - 18), Math.max(12, bounds.width - 322)),
       top: Math.min(Math.max(12, localY - 18), Math.max(12, bounds.height - 374)),
     });
+  }
+
+  function dismissComposerFromBoard(event: PointerEvent<HTMLDivElement>) {
+    if (!composer) return;
+    const target = event.target as HTMLElement;
+    if (target.closest(".board-composer")) return;
+    event.stopPropagation();
+    setComposer(undefined);
   }
 
   function startDrag(event: PointerEvent<HTMLElement>, post: SpatialPost) {
@@ -186,6 +216,7 @@ export function SpatialBoard({
       <div
         className={`spatial-board ${canWrite ? "can-compose" : ""}`}
         ref={boardRef}
+        onPointerDownCapture={dismissComposerFromBoard}
         onPointerDown={openComposer}
       >
         {posts.length === 0 ? (
