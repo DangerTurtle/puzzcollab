@@ -114,6 +114,7 @@ export default async function BoardPage({
           avatar={restrictedProfile?.avatar}
           message="followers only"
           boardLabel="Followers-only board"
+          restricted
         />
       );
     }
@@ -287,12 +288,14 @@ function BoardNotice({
   avatar,
   message,
   boardLabel,
+  restricted = false,
 }: {
   viewerDid?: string;
   ownerHandle: string | null | undefined;
   avatar: string | null | undefined;
   message: string;
   boardLabel: string;
+  restricted?: boolean;
 }) {
   return (
     <main className="shell board-page">
@@ -302,8 +305,14 @@ function BoardNotice({
       </section>
       <div className="board-layout">
         <div className="spatial-board-wrap">
-          <div className="spatial-board" aria-label={boardLabel}>
-            <div className="note board-state-note">{message}</div>
+          <div
+            className="spatial-board"
+            aria-label={boardLabel}
+          >
+            <div className="board-state-plaque">
+              {restricted && <span aria-hidden="true">🔒</span>}
+              {message}
+            </div>
           </div>
         </div>
       </div>
