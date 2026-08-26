@@ -23,11 +23,15 @@ export default async function Home() {
             create your <span>bulletin</span>
           </h1>
           <LoginForm />
-          <div className="home-about-row">
+          <nav className="home-login-links" aria-label="More about Bulletin">
+            <span className="home-alpha-prompt">
+              get your{" "}
+              <a href="https://bsky.network/account">spaces alpha</a> account
+            </span>
             <Link className="topbar-link" href="/about">
               about
             </Link>
-          </div>
+          </nav>
         </div>
 
         <ul className="home-feature-notes" aria-label="What Bulletin does">

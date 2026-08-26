@@ -178,9 +178,7 @@ export default async function BoardPage({
   const profileEntries = await Promise.all(
     [...new Set(displayedPosts.map((post) => post.authorDid))]
       .filter((did) => did !== ownerDid)
-      .map(
-        async (did) => [did, await getProfile(did)] as const,
-      ),
+      .map(async (did) => [did, await getProfile(did)] as const),
   );
   const profiles = new Map<string, Profile | null>([
     [ownerDid, ownerProfile],
@@ -219,15 +217,16 @@ function IncompatiblePds({ viewerDid }: { viewerDid: string }) {
   return (
     <main className="shell">
       <Header did={viewerDid} />
-      <div className="gate">
-        <div className="gate-sticker">pds upgrade needed</div>
-        <h1 className="gate-title">
-          your PDS isn’t ready for <span>bulletins</span>
+      <div className="gate incompatible-gate">
+        <h1 className="gate-title incompatible-title">
+          your PDS doesn’t support <span>bulletins</span> yet
         </h1>
-        <p>
-          you’ll need to move to a PDS that supports permissioned data before
-          you can create a bulletin
-        </p>
+        <a
+          className="button incompatible-cta"
+          href="https://bsky.network/account"
+        >
+          get an atproto spaces alpha account
+        </a>
       </div>
     </main>
   );
@@ -300,10 +299,7 @@ function BoardNotice({
       </section>
       <div className="board-layout">
         <div className="spatial-board-wrap">
-          <div
-            className="spatial-board"
-            aria-label={boardLabel}
-          >
+          <div className="spatial-board" aria-label={boardLabel}>
             <div className="board-state-plaque">
               {restricted && <span aria-hidden="true">🔒</span>}
               {message}
