@@ -1,0 +1,57 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.puzzle",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A puzzle published by a host, with one or more clues to solve.",
+      "record": {
+        "type": "object",
+        "required": ["title", "clues", "createdAt"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxGraphemes": 200,
+            "maxLength": 2000
+          },
+          "clues": {
+            "type": "array",
+            "items": {
+              "type": "ref",
+              "ref": "#clue"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "clue": {
+      "type": "object",
+      "description": "id is opaque, assigned once at authoring time, and never changes -- attempts and comments reference it by id, so it must outlive any later edit to name, prompt, or answerBlock. name is the human-facing label (defaults to 1..n; may itself encode presentational meaning, e.g. grid position for a crossword) and can be freely re-edited by the author without affecting existing references.",
+      "required": ["id", "name", "prompt", "answerBlock"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "prompt": {
+          "type": "string",
+          "maxGraphemes": 500,
+          "maxLength": 5000
+        },
+        "answerBlock": {
+          "type": "bytes",
+          "description": "Encrypted. Decrypts to { canonical: string, accepted: [{ match: string } | { match: string, hint: string }] }. Opaque to the lexicon by design, so its internal shape can change freely without a protocol-level compatibility concern."
+        }
+      }
+    }
+  }
+}

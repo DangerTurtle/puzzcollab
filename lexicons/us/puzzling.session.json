@@ -1,0 +1,25 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.session",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A team's attempt at a specific puzzle.",
+      "record": {
+        "type": "object",
+        "required": ["puzzle", "createdAt"],
+        "properties": {
+          "puzzle": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

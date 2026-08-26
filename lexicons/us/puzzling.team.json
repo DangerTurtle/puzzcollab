@@ -1,0 +1,18 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.team",
+  "defs": {
+    "main": {
+      "type": "space",
+      "key": "literal:self",
+      "name": "Puzzling Team",
+      "description": "A persistent group of people who collaborate on puzzles together.",
+      "collections": [
+        "us.puzzling.invite",
+        "us.puzzling.session",
+        "us.puzzling.attempt",
+        "us.puzzling.comment"
+      ]
+    }
+  }
+}

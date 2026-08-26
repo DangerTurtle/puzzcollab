@@ -1,0 +1,31 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.profile",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "literal:self",
+      "description": "A team's display name and description. Kept separate from the team space record, which cannot carry custom fields.",
+      "record": {
+        "type": "object",
+        "required": ["name", "createdAt"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxGraphemes": 100,
+            "maxLength": 300
+          },
+          "description": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "maxLength": 3000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

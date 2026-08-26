@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.comment",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A chat message, optionally attached to a specific clue.",
+      "record": {
+        "type": "object",
+        "required": ["session", "text", "createdAt"],
+        "properties": {
+          "session": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef"
+          },
+          "clueId": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The opaque id of the clue this comment is attached to, within the session's puzzle. Absent for general team chat."
+          },
+          "text": {
+            "type": "string",
+            "maxGraphemes": 1000,
+            "maxLength": 10000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

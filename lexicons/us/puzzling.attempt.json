@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.attempt",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A guess at a clue's answer. No correctness field: verdicts are computed by the AppView at render time against the puzzle's answer key, so an answer-key correction can retroactively reclassify old attempts. No author field: authorship is structural, carried by which contributor's sub-repo within the team's space wrote the record.",
+      "record": {
+        "type": "object",
+        "required": ["session", "clueId", "text", "createdAt"],
+        "properties": {
+          "session": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef"
+          },
+          "clueId": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The opaque id of the clue, within the referenced session's puzzle, this attempt is answering."
+          },
+          "text": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "maxLength": 3000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

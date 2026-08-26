@@ -1,0 +1,30 @@
+{
+  "lexicon": 1,
+  "id": "us.puzzling.member",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A team-authored roster entry. Deliberately not part of the team space's delegated collections: this record type is what determines who gets delegated write access to the space in the first place, so only the team's own key may write it.",
+      "record": {
+        "type": "object",
+        "required": ["member", "addedAt"],
+        "properties": {
+          "member": {
+            "type": "string",
+            "format": "did"
+          },
+          "addedAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "invitedBy": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The invite record redeemed to add this member, if any."
+          }
+        }
+      }
+    }
+  }
+}
