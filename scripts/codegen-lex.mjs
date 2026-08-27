@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const lexicons = [
   "com.atproto.simplespace.createSpace",
+  "com.atproto.simplespace.updateSpace",
   "com.atproto.simplespace.getSpace",
   "com.atproto.space.getDelegationToken",
   "com.atproto.space.getSpaceCredential",

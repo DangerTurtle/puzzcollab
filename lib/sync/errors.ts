@@ -15,6 +15,10 @@ export function isSpaceNotFoundError(error: unknown): boolean {
   return error instanceof LexError && error.error === "SpaceNotFound";
 }
 
+export function isSpaceAlreadyExistsError(error: unknown): boolean {
+  return error instanceof LexError && error.error === "SpaceAlreadyExists";
+}
+
 export function isSpaceAccessDeniedError(error: unknown): boolean {
   return (
     error instanceof LexError &&

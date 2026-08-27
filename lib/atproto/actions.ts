@@ -2,6 +2,7 @@ import { Client } from "@atproto/lex-client";
 import { asStringFormat } from "@atproto/lex-schema";
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
+  BOARD_SKEY,
   REMOVAL_COLLECTION,
   POSITION_COLLECTION,
   POST_COLLECTION,
@@ -9,6 +10,7 @@ import {
   boardUri,
   getConfig,
 } from "../config";
+import { isSpaceAlreadyExistsError } from "../sync/errors";
 import {
   deleteStoredPost,
   applySyncedChanges,
@@ -31,19 +33,41 @@ import { com } from "../lexicons";
 
 export async function createBoard(session: OAuthSession): Promise<string> {
   const client = new Client(session);
-  const result = await client.call(com.atproto.simplespace.createSpace, {
-    type: SPACE_TYPE,
-    skey: "self",
-    policy: {
-      $type: "com.atproto.simplespace.defs#managingAppPolicy",
-      managingApp: getConfig().managingAppService,
-    },
-    appAccess: {
-      $type: "com.atproto.simplespace.defs#open",
-    },
-  });
-  await saveBoard(result.uri, session.did);
-  return result.uri;
+  const policy = {
+    $type: "com.atproto.simplespace.defs#managingAppPolicy" as const,
+    managingApp: getConfig().managingAppService,
+  };
+  const appAccess = {
+    $type: "com.atproto.simplespace.defs#open" as const,
+  };
+  try {
+    const result = await client.call(com.atproto.simplespace.createSpace, {
+      type: SPACE_TYPE,
+      skey: BOARD_SKEY,
+      policy,
+      appAccess,
+    });
+    await saveBoard(result.uri, session.did);
+    return result.uri;
+  } catch (error) {
+    // A space already exists at this owner/type/skey. This is expected when
+    // the managing app's own DID (MANAGING_APP_DID) changes after the board
+    // was first created -- the space's policy names the managing app by DID
+    // and is never re-evaluated on its own, so a deployment's domain change
+    // orphans every board it already created. Since we're the owner, repair
+    // the stored policy in place rather than failing: this leaves the
+    // board's existing posts untouched and lets the sync engine recognize
+    // it as ours again.
+    if (!isSpaceAlreadyExistsError(error)) throw error;
+    const uri = boardUri(session.did);
+    await client.call(com.atproto.simplespace.updateSpace, {
+      space: asStringFormat(uri, "space-ref"),
+      policy,
+      appAccess,
+    });
+    await saveBoard(uri, session.did);
+    return uri;
+  }
 }
 
 export async function createPost(
