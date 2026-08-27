@@ -1,0 +1,13 @@
+services:
+  bulletin:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - env/docker.env
+    volumes:
+      - bulletin-data:/data
+    restart: unless-stopped
+
+volumes:
+  bulletin-data:
