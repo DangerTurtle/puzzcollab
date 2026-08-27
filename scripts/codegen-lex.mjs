@@ -19,9 +19,14 @@ const lexicons = [
   "app.bsky.actor.searchActorsTypeahead",
 ];
 
+const lexBin = fileURLToPath(
+  new URL("../node_modules/@atproto/lex/bin/lex", import.meta.url),
+);
+
 execFileSync(
-  "lex",
+  process.execPath,
   [
+    lexBin,
     "build",
     "--lexicons",
     fileURLToPath(new URL("../lexicons/upstream", import.meta.url)),

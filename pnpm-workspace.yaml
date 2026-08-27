@@ -1,0 +1,18 @@
+packages:
+  - "packages/*"
+
+allowBuilds:
+  better-sqlite3: true
+  core-js: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+
+# Move your pnpm configurations here, removing the "pnpm." prefix
+overrides:
+  '@atproto/lex-builder': 'alpha'
+  '@atproto/lex-client': 'alpha'
+  '@atproto/lex-document': 'alpha'
+  '@atproto/lex-installer': 'alpha'
+  '@atproto/lex-resolver': 'alpha'
+  '@atproto/lex-schema': 'alpha'
